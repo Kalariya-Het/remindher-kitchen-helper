@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, useEffect, useCallback } from "react";
+import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { useTheme } from "./ThemeContext";
 import { useAuth } from "./AuthContext";
@@ -11,24 +11,34 @@ interface VoiceContextType {
   startListening: () => void;
   stopListening: () => void;
   voiceResponse: string | null;
+  isProcessing: boolean;
+  recognitionError: string | null;
+  resetRecognitionError: () => void;
 }
 
 const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
 
 export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [voiceResponse, setVoiceResponse] = useState<string | null>(null);
+  const [recognitionError, setRecognitionError] = useState<string | null>(null);
   const { toast } = useToast();
   const { setThemeByVoice } = useTheme();
   const { login, register, logout } = useAuth();
   const navigate = useNavigate();
+  
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
-  let recognitionInstance: SpeechRecognition | null = null;
+  const resetRecognitionError = useCallback(() => {
+    setRecognitionError(null);
+  }, []);
 
   const setupSpeechRecognition = useCallback(() => {
     // Check for browser support
     if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
+      setRecognitionError("Your browser doesn't support speech recognition");
       toast({
         title: "Speech Recognition Not Supported",
         description: "Your browser doesn't support voice recognition",
@@ -41,12 +51,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const recognition = new SpeechRecognition();
 
     recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
       setIsListening(true);
       setTranscript("");
+      setRecognitionError(null);
     };
 
     recognition.onend = () => {
@@ -54,17 +65,52 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     recognition.onresult = (event) => {
-      const command = event.results[0][0].transcript.toLowerCase();
-      setTranscript(command);
-      processCommand(command);
+      const interimTranscript = Array.from(event.results)
+        .map(result => result[0].transcript)
+        .join('');
+      
+      setTranscript(interimTranscript);
+      
+      // Only process final results
+      if (event.results[0].isFinal) {
+        const finalCommand = event.results[0][0].transcript.toLowerCase();
+        processCommand(finalCommand);
+      }
     };
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error', event.error);
       setIsListening(false);
+      
+      let errorMessage = "Voice recognition error";
+      switch (event.error) {
+        case 'no-speech':
+          errorMessage = "No speech was detected. Please try again.";
+          break;
+        case 'aborted':
+          errorMessage = "Speech recognition was aborted.";
+          break;
+        case 'audio-capture':
+          errorMessage = "No microphone was found. Ensure it's connected and permissions are granted.";
+          break;
+        case 'network':
+          errorMessage = "Network error occurred. Check your internet connection.";
+          break;
+        case 'not-allowed':
+          errorMessage = "Microphone permission was denied. Please allow microphone access.";
+          break;
+        case 'service-not-allowed':
+          errorMessage = "Speech recognition service is not allowed. Try a different browser.";
+          break;
+        default:
+          errorMessage = `Error: ${event.error}. Please try again.`;
+      }
+      
+      setRecognitionError(errorMessage);
+      
       toast({
         title: "Voice Recognition Error",
-        description: `Error: ${event.error}`,
+        description: errorMessage,
         variant: "destructive",
       });
     };
@@ -154,26 +200,46 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const startListening = useCallback(() => {
     if (isListening) return;
     
-    if (!recognitionInstance) {
-      recognitionInstance = setupSpeechRecognition();
+    resetRecognitionError();
+    
+    if (!recognitionRef.current) {
+      recognitionRef.current = setupSpeechRecognition();
     }
     
-    if (recognitionInstance) {
-      recognitionInstance.start();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+      } catch (error) {
+        console.error("Error starting speech recognition:", error);
+        setRecognitionError("Failed to start speech recognition. Please try again.");
+        toast({
+          title: "Voice Recognition Error",
+          description: "Failed to start. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
-  }, [isListening, setupSpeechRecognition]);
+  }, [isListening, setupSpeechRecognition, resetRecognitionError, toast]);
 
   const stopListening = useCallback(() => {
-    if (!isListening || !recognitionInstance) return;
+    if (!isListening || !recognitionRef.current) return;
     
-    recognitionInstance.stop();
+    try {
+      recognitionRef.current.stop();
+    } catch (error) {
+      console.error("Error stopping speech recognition:", error);
+    }
   }, [isListening]);
 
   // Clean up on unmount
   useEffect(() => {
     return () => {
-      if (recognitionInstance) {
-        recognitionInstance.abort();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (error) {
+          console.error("Error aborting speech recognition:", error);
+        }
       }
     };
   }, []);
@@ -186,6 +252,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         startListening,
         stopListening,
         voiceResponse,
+        isProcessing,
+        recognitionError,
+        resetRecognitionError,
       }}
     >
       {children}
