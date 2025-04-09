@@ -1,3 +1,4 @@
+
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { useTheme } from "./ThemeContext";
@@ -13,6 +14,7 @@ interface VoiceContextType {
   isProcessing: boolean;
   recognitionError: string | null;
   resetRecognitionError: () => void;
+  retryRecognition: () => void;
 }
 
 interface SpeechRecognitionResult {
@@ -43,18 +45,22 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [transcript, setTranscript] = useState("");
   const [voiceResponse, setVoiceResponse] = useState<string | null>(null);
   const [recognitionError, setRecognitionError] = useState<string | null>(null);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const { toast } = useToast();
   const { setThemeByVoice } = useTheme();
   const { login, register, logout } = useAuth();
   const navigate = useNavigate();
   
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const maxReconnectAttempts = 3;
 
   const resetRecognitionError = useCallback(() => {
     setRecognitionError(null);
+    setReconnectAttempts(0);
   }, []);
 
   const setupSpeechRecognition = useCallback(() => {
+    // First check if browser support exists
     if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
       setRecognitionError("Your browser doesn't support speech recognition");
       toast({
@@ -65,24 +71,44 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return null;
     }
 
+    // Create a new instance of SpeechRecognition
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
 
+    // Configure recognition settings
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
+    // Set recognition event handlers
     recognition.onstart = () => {
+      console.log("Speech recognition started");
       setIsListening(true);
       setTranscript("");
       setRecognitionError(null);
     };
 
     recognition.onend = () => {
+      console.log("Speech recognition ended");
       setIsListening(false);
+      
+      // Automatically retry if there was a network error and we haven't exceeded max attempts
+      if (recognitionError === "Network error occurred. Check your internet connection." && 
+          reconnectAttempts < maxReconnectAttempts) {
+        console.log(`Auto-retrying recognition (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+        setTimeout(() => {
+          setReconnectAttempts(prev => prev + 1);
+          try {
+            recognition.start();
+          } catch (error) {
+            console.error("Error on auto-retry:", error);
+          }
+        }, 1000);
+      }
     };
 
     recognition.onresult = (event: any) => {
+      console.log("Got speech recognition result", event);
       let interimTranscript = '';
       
       for (let i = 0; i < event.results.length; i++) {
@@ -114,6 +140,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           break;
         case 'network':
           errorMessage = "Network error occurred. Check your internet connection.";
+          // We'll handle network errors with auto-retry
           break;
         case 'not-allowed':
           errorMessage = "Microphone permission was denied. Please allow microphone access.";
@@ -127,16 +154,46 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       
       setRecognitionError(errorMessage);
       
-      toast({
-        title: "Voice Recognition Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      // Only show toast for non-network errors or if we've exceeded retry attempts
+      if (event.error !== 'network' || reconnectAttempts >= maxReconnectAttempts) {
+        toast({
+          title: "Voice Recognition Error",
+          description: errorMessage + (event.error === 'network' ? " Tap the mic button to try again." : ""),
+          variant: "destructive",
+        });
+      }
     };
 
     return recognition;
-  }, [toast]);
+  }, [toast, reconnectAttempts, recognitionError]);
 
+  // Function to manually retry recognition after error
+  const retryRecognition = useCallback(() => {
+    resetRecognitionError();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+        setTimeout(() => {
+          if (recognitionRef.current) {
+            recognitionRef.current.start();
+          }
+        }, 500);
+      } catch (error) {
+        console.error("Error retrying recognition:", error);
+      }
+    } else {
+      recognitionRef.current = setupSpeechRecognition();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.start();
+        } catch (error) {
+          console.error("Error starting speech recognition on retry:", error);
+        }
+      }
+    }
+  }, [resetRecognitionError, setupSpeechRecognition]);
+
+  // Process voice commands
   const processCommand = useCallback((command: string) => {
     if (command.includes("switch to dark mode") || command.includes("dark mode")) {
       setThemeByVoice("dark");
@@ -216,12 +273,14 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     
     resetRecognitionError();
     
+    // Check if we need to create a new recognition instance
     if (!recognitionRef.current) {
       recognitionRef.current = setupSpeechRecognition();
     }
     
     if (recognitionRef.current) {
       try {
+        console.log("Starting speech recognition");
         recognitionRef.current.start();
       } catch (error) {
         console.error("Error starting speech recognition:", error);
@@ -239,12 +298,14 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!isListening || !recognitionRef.current) return;
     
     try {
+      console.log("Stopping speech recognition");
       recognitionRef.current.stop();
     } catch (error) {
       console.error("Error stopping speech recognition:", error);
     }
   }, [isListening]);
 
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
@@ -268,6 +329,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isProcessing,
         recognitionError,
         resetRecognitionError,
+        retryRecognition
       }}
     >
       {children}
