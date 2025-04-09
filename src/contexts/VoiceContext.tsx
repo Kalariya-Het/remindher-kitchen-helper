@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { useTheme } from "./ThemeContext";
@@ -14,6 +13,26 @@ interface VoiceContextType {
   isProcessing: boolean;
   recognitionError: string | null;
   resetRecognitionError: () => void;
+}
+
+interface SpeechRecognitionResult {
+  transcript: string;
+  confidence: number;
+  isFinal: boolean;
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: {
+    [index: number]: SpeechRecognitionResult;
+    isFinal: boolean;
+    length: number;
+  };
+  length: number;
+}
+
+interface SpeechRecognitionEvent {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
 }
 
 const VoiceContext = createContext<VoiceContextType | undefined>(undefined);
@@ -36,7 +55,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const setupSpeechRecognition = useCallback(() => {
-    // Check for browser support
     if (!('SpeechRecognition' in window) && !('webkitSpeechRecognition' in window)) {
       setRecognitionError("Your browser doesn't support speech recognition");
       toast({
@@ -64,18 +82,19 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setIsListening(false);
     };
 
-    recognition.onresult = (event) => {
-      const interimTranscript = Array.from(event.results)
-        .map(result => result[0].transcript)
-        .join('');
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      
+      for (let i = 0; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        interimTranscript += transcript;
+        
+        if (event.results[i].isFinal && i === event.results.length - 1) {
+          processCommand(transcript.toLowerCase());
+        }
+      }
       
       setTranscript(interimTranscript);
-      
-      // Only process final results
-      if (event.results[0].isFinal) {
-        const finalCommand = event.results[0][0].transcript.toLowerCase();
-        processCommand(finalCommand);
-      }
     };
 
     recognition.onerror = (event) => {
@@ -119,7 +138,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [toast]);
 
   const processCommand = useCallback((command: string) => {
-    // Theme commands
     if (command.includes("switch to dark mode") || command.includes("dark mode")) {
       setThemeByVoice("dark");
       respondToUser("Switched to dark mode");
@@ -128,7 +146,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setThemeByVoice("light");
       respondToUser("Switched to light mode");
     }
-    // Navigation commands
     else if (command.includes("go to reminders") || command.includes("show reminders")) {
       navigate("/reminders");
       respondToUser("Opening reminders page");
@@ -145,7 +162,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       navigate("/assistant");
       respondToUser("Opening voice assistant page. What's on your mind today?");
     }
-    // Auth commands - simplified for demo
     else if (command.includes("login with")) {
       const usernameMatch = command.match(/login with (\w+)(?: and |,| )?(\w+)?/);
       if (usernameMatch && usernameMatch[1]) {
@@ -175,7 +191,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       respondToUser("You've been logged out");
       navigate("/");
     }
-    // Generic response
     else {
       respondToUser("I heard you say: " + command);
     }
@@ -188,7 +203,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       description: message,
     });
     
-    // Use speech synthesis to respond
     const speech = new SpeechSynthesisUtterance(message);
     speech.lang = 'en-US';
     speech.volume = 1;
@@ -231,7 +245,6 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [isListening]);
 
-  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (recognitionRef.current) {
