@@ -18,11 +18,11 @@ export const useVoiceCommandProcessor = () => {
 
     // Theme commands
     if (lowerCommand.includes("switch to dark mode") || lowerCommand.includes("dark mode")) {
-      setThemeByVoice("dark");
+      setThemeByVoice("dark", true); // Added second argument (true)
       return { wasProcessed: true, response: "Switched to dark mode" };
     } 
     if (lowerCommand.includes("switch to light mode") || lowerCommand.includes("light mode")) {
-      setThemeByVoice("light");
+      setThemeByVoice("light", true); // Added second argument (true)
       return { wasProcessed: true, response: "Switched to light mode" };
     }
     
