@@ -222,7 +222,7 @@ const AnalysisPage = () => {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={(entry) => typeof entry.name === "string" ? entry.name : String(entry.name)}
+                      label={(entry: any) => String(entry.name)}
                       dataKey="value"
                     >
                       {reminderTypePie.map((entry, idx) =>
