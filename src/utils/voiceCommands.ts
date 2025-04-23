@@ -76,7 +76,7 @@ export const useVoiceCommandProcessor = () => {
         const password = usernameMatch[2] || "password"; // Demo only
         
         try {
-          await register(username, password); // only two arguments
+          await register(username, password, undefined); // pass third arg as undefined
           toast({
             title: "Registration Successful",
             description: `Account created for ${username}`,
