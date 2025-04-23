@@ -226,7 +226,7 @@ const AnalysisPage = () => {
                         if (entry && typeof entry === "object" && "name" in entry && typeof entry.name === "string") {
                           return entry.name;
                         }
-                        return "";
+                        return null;
                       }}
                       dataKey="value"
                     >
