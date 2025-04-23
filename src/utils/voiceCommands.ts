@@ -52,8 +52,7 @@ export const useVoiceCommandProcessor = () => {
         const password = usernameMatch[2] || "password"; // Demo only
 
         try {
-          // Added a dummy options argument as expected for your login call
-          await login(username, password, {});
+          await login(username, password);
           toast({
             title: "Login Successful",
             description: `Welcome back, ${username}`,

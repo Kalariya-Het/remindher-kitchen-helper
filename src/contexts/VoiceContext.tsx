@@ -28,10 +28,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const { processCommand } = useVoiceCommandProcessor();
   
   // Handler for speech recognition results
-  const handleRecognitionResult = useCallback((transcript: string, isFinal: boolean) => {
+  const handleRecognitionResult = useCallback(async (transcript: string, isFinal: boolean) => {
     if (isFinal) {
       // Process the command when it's final
-      const result = processCommand(transcript);
+      const result = await processCommand(transcript);
       
       if (result.wasProcessed && result.response) {
         respondToUser(result.response);
@@ -92,3 +92,4 @@ export const useVoice = (): VoiceContextType => {
   
   return context;
 };
+

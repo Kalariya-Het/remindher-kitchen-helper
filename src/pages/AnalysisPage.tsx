@@ -8,7 +8,6 @@ import { PieChart, Pie, Cell, Sector, Legend, ResponsiveContainer, BarChart, Bar
 import dayjs from "dayjs";
 import { supabase } from "@/integrations/supabase/client";
 
-// Color schemes
 const COLORS = ["#2ed7c7", "#f7826f", "#79d2de", "#f7b267", "#9393fa", "#28c76f", "#ea5455", "#7e8ef1", "#ffb567", "#70a1ff"];
 
 const FILTERS = {
@@ -45,19 +44,16 @@ function getDateRange(filter: string) {
   }
 }
 
-// --- Analysis Page Component ---
 const AnalysisPage = () => {
   const { isAuthenticated, user, profile } = useAuth();
   const [reminderFilter, setReminderFilter] = useState("today");
   const [taskFilter, setTaskFilter] = useState("today");
   const [pantryFilter, setPantryFilter] = useState("today");
 
-  // ---- Data Fetchers ----
   const remindersQ = useQuery({
     queryKey: ["analysis-reminders", user?.id, reminderFilter],
     queryFn: async () => {
       let query = supabase.from("reminders").select("*").eq("user_id", user!.id);
-      // Filter logic:
       if (reminderFilter === "completed") query = query.eq("completed", true);
       else if (reminderFilter === "pending") query = query.eq("completed", false);
       const dr = getDateRange(reminderFilter);
@@ -87,7 +83,6 @@ const AnalysisPage = () => {
   const pantryQ = useQuery({
     queryKey: ["analysis-pantry", user?.id],
     queryFn: async () => {
-      // Pantry items and logs for analytics
       const [items, logs] = await Promise.all([
         supabase.from("pantry_items").select("*").eq("user_id", user!.id),
         supabase.from("pantry_inventory_logs").select("*").eq("user_id", user!.id),
@@ -99,11 +94,8 @@ const AnalysisPage = () => {
     enabled: !!user,
   });
 
-  // ---- Computation for charts ----
-  // Reminders
   const reminderStackedData = useMemo(() => {
     if (!remindersQ.data) return [];
-    // Group by completed
     const set = remindersQ.data.length;
     const complete = remindersQ.data.filter(r => r.completed).length;
     const pending = set - complete;
@@ -121,7 +113,6 @@ const AnalysisPage = () => {
     }));
   }, [remindersQ.data]);
 
-  // Tasks
   const tasksByMember = useMemo(() => {
     if (!tasksQ.data) return [];
     const map: any = {};
@@ -137,7 +128,6 @@ const AnalysisPage = () => {
 
   const tasksOverTime = useMemo(() => {
     if (!tasksQ.data) return [];
-    // Group by date for line chart
     const m: Record<string, { date: string; total: number; completed: number }> = {};
     tasksQ.data.forEach(t => {
       const d = dayjs(t.date).format("YYYY-MM-DD");
@@ -148,10 +138,8 @@ const AnalysisPage = () => {
     return Object.values(m).sort((a, b) => a.date.localeCompare(b.date));
   }, [tasksQ.data]);
 
-  // Pantry: Analytics based on items and inventory logs
   const pantryTopUsed = useMemo(() => {
     if (!pantryQ.data) return [];
-    // "use" logs, count by item
     const countMap: Record<string, { name: string; used: number }> = {};
     pantryQ.data.logs.filter((l: any) => l.type === "use").forEach(l => {
       const item = pantryQ.data.items.find((i: any) => i.id === l.pantry_item_id);
@@ -173,7 +161,6 @@ const AnalysisPage = () => {
 
   const pantryLogsOverTime = useMemo(() => {
     if (!pantryQ.data) return [];
-    // Sum quantities by day
     const m: Record<string, number> = {};
     pantryQ.data.logs.forEach((l: any) => {
       const d = dayjs(l.logged_at).format("YYYY-MM-DD");
@@ -182,7 +169,6 @@ const AnalysisPage = () => {
     return Object.entries(m).map(([date, qty]) => ({ date, qty: Number(qty) })).sort((a, b) => a.date.localeCompare(b.date));
   }, [pantryQ.data]);
 
-  // ---- Filter bar/button components ---
   const FilterBar = ({ filters, value, setValue }: any) => (
     <div className="flex space-x-2 mb-4">
       {Object.entries(filters).map(([key, label]) =>
@@ -191,7 +177,6 @@ const AnalysisPage = () => {
     </div>
   );
 
-  // --- Protected route check ---
   if (!isAuthenticated) return <div className="p-10 text-center text-lg">Please login to view your analytics.</div>;
 
   return (
@@ -204,7 +189,6 @@ const AnalysisPage = () => {
           <TabsTrigger value="pantry">Pantry</TabsTrigger>
         </TabsList>
 
-        {/* ---- Reminders Tab ---- */}
         <TabsContent value="reminders">
           <FilterBar filters={FILTERS} value={reminderFilter} setValue={setReminderFilter} />
           <div className="flex flex-wrap gap-6">
@@ -238,7 +222,7 @@ const AnalysisPage = () => {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={(entry) => String(entry.name)}
+                      label={(entry) => typeof entry.name === "string" ? entry.name : String(entry.name)}
                       dataKey="value"
                     >
                       {reminderTypePie.map((entry, idx) =>
@@ -253,7 +237,6 @@ const AnalysisPage = () => {
           </div>
         </TabsContent>
 
-        {/* ---- Tasks Tab ---- */}
         <TabsContent value="tasks">
           <FilterBar filters={FILTERS} value={taskFilter} setValue={setTaskFilter} />
           <div className="flex flex-wrap gap-6">
@@ -313,7 +296,6 @@ const AnalysisPage = () => {
           </div>
         </TabsContent>
 
-        {/* ---- Pantry Tab ---- */}
         <TabsContent value="pantry">
           <FilterBar filters={PANTRY_FILTERS} value={pantryFilter} setValue={setPantryFilter} />
           <div className="flex flex-wrap gap-6">
