@@ -222,8 +222,8 @@ const AnalysisPage = () => {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={(entry: any) => 
-                        (typeof entry?.name === "string" ? entry.name : null) as React.ReactNode
+                      label={(entry: any) =>
+                        typeof entry?.name === "string" ? entry.name : ""
                       }
                       dataKey="value"
                     >
