@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +13,7 @@ const COLORS = ["#2ed7c7", "#f7826f", "#79d2de", "#f7b267", "#9393fa", "#28c76f"
 
 const FILTERS = {
   today: "Today",
-  yesterday: "Yesterday",
+  yesterday: "Yesterday", 
   thisweek: "This Week",
   completed: "Completed",
   pending: "Pending",
@@ -115,7 +114,11 @@ const AnalysisPage = () => {
     if (!remindersQ.data) return [];
     const map: any = {};
     remindersQ.data.forEach(r => { map[r.type] = (map[r.type] || 0) + 1; });
-    return Object.entries(map).map(([type, value]: any, i) => ({ name: type, value, color: COLORS[i % COLORS.length] }));
+    return Object.entries(map).map(([type, value]: any, i) => ({
+      name: type as string,
+      value: value as number,
+      color: COLORS[i % COLORS.length],
+    }));
   }, [remindersQ.data]);
 
   // Tasks
@@ -230,7 +233,14 @@ const AnalysisPage = () => {
               <CardContent>
                 <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
-                    <Pie data={reminderTypePie} cx="50%" cy="50%" outerRadius={70} label>
+                    <Pie
+                      data={reminderTypePie}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      label
+                      dataKey="value"
+                    >
                       {reminderTypePie.map((entry, idx) =>
                         <Cell key={`cell-${idx}`} fill={entry.color} />
                       )}
@@ -276,7 +286,7 @@ const AnalysisPage = () => {
                     data={[{ name: "Complete", value: taskCompletionRate }]}
                     startAngle={180} endAngle={-180}
                   >
-                    <RadialBar minAngle={15} clockWise dataKey="value" fill={COLORS[0]} />
+                    <RadialBar dataKey="value" clockWise fill={COLORS[0]} />
                     <Legend iconSize={10} layout="vertical" verticalAlign="middle" align="right" />
                   </RadialBarChart>
                 </ResponsiveContainer>

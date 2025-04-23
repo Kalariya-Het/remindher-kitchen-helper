@@ -107,7 +107,7 @@ export const useVoiceCommandProcessor = () => {
       navigate("/");
       return { wasProcessed: true, response: "You've been logged out" };
     }
-    
+
     return { wasProcessed: false };
   };
 

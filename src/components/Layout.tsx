@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,7 +13,7 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isAuthenticated, user, logout, profile } = useAuth();
 
   const navItems = [
     {
@@ -64,12 +63,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Auth Buttons */}
             {isAuthenticated ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm">Hello, {user?.username}</span>
-                <Button 
-                  variant="ghost" 
+                <span className="text-sm">
+                  Hello, {profile?.username ?? user?.email}
+                </span>
+                <Button
+                  variant="ghost"
                   size="icon"
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
+                    await logout();
                     navigate("/");
                   }}
                   aria-label="Logout"
