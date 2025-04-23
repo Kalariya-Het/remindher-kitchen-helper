@@ -231,7 +231,7 @@ const AnalysisPage = () => {
                         ) {
                           return String(entry.name);
                         }
-                        return "";
+                        return null;
                       }}
                       dataKey="value"
                     >
