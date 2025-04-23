@@ -1,83 +1,124 @@
 
-import React, { createContext, useState, useContext, useEffect } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { User, Session } from "@supabase/supabase-js";
 
-interface User {
-  username: string;
+interface Profile {
+  id: string;
+  username: string | null;
+  created_at?: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  profile: Profile | null;
+  session: Session | null;
   isAuthenticated: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  register: (email: string, password: string, username: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const isAuthenticated = !!user;
 
+  // --- Set up session and auth listener ---
   useEffect(() => {
-    // Check if user is stored in localStorage
-    const storedUser = localStorage.getItem("remindher-user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    // Set up Supabase subscription FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        setTimeout(() => refreshProfile(), 0);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    // Get current session once on mount
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session ?? null);
+      setUser(data.session?.user ?? null);
+      if (data.session?.user) {
+        refreshProfile();
+      }
+    });
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line
   }, []);
 
-  const login = async (username: string, password: string) => {
-    // In a real app, this would validate against a backend
-    // For this prototype, we'll simulate a successful login after a delay
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const newUser = { username };
-        setUser(newUser);
-        localStorage.setItem("remindher-user", JSON.stringify(newUser));
-        resolve();
-      }, 1000);
-    });
+  // --- Fetch user profile from DB ---
+  const refreshProfile = async () => {
+    if (!user) { setProfile(null); return; }
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    if (!error) setProfile(data ?? null);
   };
 
-  const register = async (username: string, password: string) => {
-    // In a real app, this would create a user in a backend
-    // For this prototype, we'll simulate a successful registration
-    return new Promise<void>((resolve) => {
-      setTimeout(() => {
-        const newUser = { username };
-        setUser(newUser);
-        localStorage.setItem("remindher-user", JSON.stringify(newUser));
-        resolve();
-      }, 1000);
-    });
+  // --- Login handler ---
+  const login = async (email: string, password: string) => {
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    setSession(data.session);
+    setUser(data.user);
+    await refreshProfile();
+    return {};
   };
 
-  const logout = () => {
+  // --- Register handler ---
+  const register = async (email: string, password: string, username: string) => {
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { username },
+      },
+    });
+    if (error) return { error: error.message };
+    setSession(data.session);
+    setUser(data.user);
+    // Let Supabase trigger insert the profile, then fetch it after a delay
+    setTimeout(refreshProfile, 1200);
+    return {};
+  };
+
+  // --- Logout ---
+  const logout = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
     setUser(null);
-    localStorage.removeItem("remindher-user");
+    setProfile(null);
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        isAuthenticated: !!user,
+        profile,
+        session,
+        isAuthenticated,
         login,
         register,
         logout,
-      }}
-    >
+        refreshProfile,
+      }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
 export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be inside AuthProvider");
+  return ctx;
 };

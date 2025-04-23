@@ -11,134 +11,83 @@ import VoicePrompt from "@/components/VoicePrompt";
 import VoiceButton from "@/components/VoiceButton";
 
 const RegisterPage = () => {
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setLoading] = useState(false);
   const { register } = useAuth();
-  const navigate = useNavigate();
   const { toast } = useToast();
+  const nav = useNavigate();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!username || !password || !confirmPassword) {
-      toast({
-        title: "Registration Failed",
-        description: "Please fill all fields",
-        variant: "destructive",
-      });
+    if (pw !== confirm) {
+      toast({ title: "Passwords Don't Match", description: "Please make sure your passwords match", variant: "destructive" });
       return;
     }
-    
-    if (password !== confirmPassword) {
-      toast({
-        title: "Passwords Don't Match",
-        description: "Please make sure your passwords match",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    setIsLoading(true);
-    
-    try {
-      await register(username, password);
-      toast({
-        title: "Registration Successful",
-        description: `Account created for ${username}`,
-      });
-      navigate("/");
-    } catch (error) {
-      console.error("Registration error:", error);
-      toast({
-        title: "Registration Failed",
-        description: "Unable to create account",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+    setLoading(true);
+    const result = await register(email.trim(), pw, username.trim());
+    setLoading(false);
+    if (result.error) {
+      toast({ title: "Registration Failed", description: result.error, variant: "destructive" });
+    } else {
+      toast({ title: "Registration Successful", description: `Registered with ${email}` });
+      nav("/");
     }
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
       <div className="absolute top-4 left-4">
-        <Button variant="ghost" onClick={() => navigate("/")}>
+        <Button variant="ghost" onClick={() => nav("/")}>
           Back to Home
         </Button>
       </div>
-      
       <div className="max-w-md w-full">
         <Card className="border-2 border-remindher-teal">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl text-remindher-teal">RemindHer</CardTitle>
-            <CardDescription>Create your account</CardDescription>
+            <CardDescription>Create a new account</CardDescription>
           </CardHeader>
-          
           <CardContent>
             <form onSubmit={handleRegister}>
               <div className="grid gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
-                  <Input
-                    id="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Choose a username"
-                    required
-                  />
+                  <Input id="username" value={username} onChange={e => setUsername(e.target.value)} required />
                 </div>
-                
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} required />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Choose a password"
-                    required
-                  />
+                  <Input id="password" type="password" value={pw} onChange={e => setPw(e.target.value)} required />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm your password"
-                    required
-                  />
+                  <Input id="confirm-password" type="password" value={confirm} onChange={e => setConfirm(e.target.value)} required />
                 </div>
-                
                 <Button type="submit" disabled={isLoading}>
                   {isLoading ? "Creating Account..." : "Register"}
                 </Button>
               </div>
             </form>
-            
             <div className="mt-6">
               <VoicePrompt />
-              <div className="text-center mt-2">
-                <p className="text-sm text-muted-foreground">Try saying "Register with [username] and [password]"</p>
-              </div>
             </div>
           </CardContent>
-          
           <CardFooter className="flex justify-center">
             <p className="text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Button variant="link" className="p-0" onClick={() => navigate("/login")}>
+              <Button variant="link" className="p-0" onClick={() => nav("/login")}>
                 Login here
               </Button>
             </p>
           </CardFooter>
         </Card>
       </div>
-      
       <div className="fixed bottom-6 right-6">
         <VoiceButton />
       </div>

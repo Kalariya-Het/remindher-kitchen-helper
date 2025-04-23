@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -46,6 +45,15 @@ const Index = () => {
       color: "bg-remindher-lightCoral/20",
       borderColor: "border-remindher-coral",
       textColor: "text-remindher-coral",
+    },
+    {
+      title: "Analysis",
+      icon: <Clipboard className="h-6 w-6" />,
+      description: "View your kitchen & task analytics",
+      path: "/analysis",
+      color: "bg-remindher-lightTeal/20",
+      borderColor: "border-remindher-teal",
+      textColor: "text-remindher-teal",
     },
   ];
 

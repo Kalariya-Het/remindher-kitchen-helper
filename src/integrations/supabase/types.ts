@@ -9,7 +9,180 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      pantry_inventory_logs: {
+        Row: {
+          id: string
+          logged_at: string | null
+          pantry_item_id: string | null
+          quantity: number
+          type: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          logged_at?: string | null
+          pantry_item_id?: string | null
+          quantity: number
+          type: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          logged_at?: string | null
+          pantry_item_id?: string | null
+          quantity?: number
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pantry_inventory_logs_pantry_item_id_fkey"
+            columns: ["pantry_item_id"]
+            isOneToOne: false
+            referencedRelation: "pantry_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pantry_inventory_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pantry_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          low_stock_threshold: number | null
+          name: string
+          quantity: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          low_stock_threshold?: number | null
+          name: string
+          quantity?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          low_stock_threshold?: number | null
+          name?: string
+          quantity?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pantry_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          id: string
+          username: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id: string
+          username?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          username?: string | null
+        }
+        Relationships: []
+      }
+      reminders: {
+        Row: {
+          completed: boolean | null
+          created_at: string | null
+          date: string
+          id: string
+          task_name: string
+          time: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean | null
+          created_at?: string | null
+          date: string
+          id?: string
+          task_name: string
+          time: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          task_name?: string
+          time?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminders_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tasks: {
+        Row: {
+          completed: boolean | null
+          created_at: string | null
+          date: string
+          id: string
+          user_id: string
+          work: string
+          worker: string
+        }
+        Insert: {
+          completed?: boolean | null
+          created_at?: string | null
+          date: string
+          id?: string
+          user_id: string
+          work: string
+          worker: string
+        }
+        Update: {
+          completed?: boolean | null
+          created_at?: string | null
+          date?: string
+          id?: string
+          user_id?: string
+          work?: string
+          worker?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tasks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
