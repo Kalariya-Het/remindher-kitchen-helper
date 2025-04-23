@@ -1,4 +1,3 @@
-
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -18,11 +17,11 @@ export const useVoiceCommandProcessor = () => {
 
     // Theme commands
     if (lowerCommand.includes("switch to dark mode") || lowerCommand.includes("dark mode")) {
-      setThemeByVoice("dark"); // Fixed: Only 1 argument as per context definition
+      setThemeByVoice("dark"); // pass only one argument
       return { wasProcessed: true, response: "Switched to dark mode" };
     } 
     if (lowerCommand.includes("switch to light mode") || lowerCommand.includes("light mode")) {
-      setThemeByVoice("light"); // Fixed: Only 1 argument as per context definition
+      setThemeByVoice("light"); // pass only one argument
       return { wasProcessed: true, response: "Switched to light mode" };
     }
     
@@ -52,7 +51,7 @@ export const useVoiceCommandProcessor = () => {
         const password = usernameMatch[2] || "password"; // Demo only
 
         try {
-          await login(username, password, false); // Fix: Add a third argument as needed (example: false)
+          await login(username, password); // only two arguments
           toast({
             title: "Login Successful",
             description: `Welcome back, ${username}`,
@@ -77,7 +76,7 @@ export const useVoiceCommandProcessor = () => {
         const password = usernameMatch[2] || "password"; // Demo only
         
         try {
-          await register(username, password, false); // Fix: Add a third argument as needed (example: false)
+          await register(username, password); // only two arguments
           toast({
             title: "Registration Successful",
             description: `Account created for ${username}`,
