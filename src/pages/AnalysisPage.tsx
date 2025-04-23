@@ -223,8 +223,13 @@ const AnalysisPage = () => {
                       cy="50%"
                       outerRadius={70}
                       label={(entry: any): React.ReactNode => {
-                        if (entry && typeof entry === "object" && "name" in entry && typeof entry.name === "string") {
-                          return entry.name as string;
+                        if (
+                          entry &&
+                          typeof entry === "object" &&
+                          "name" in entry &&
+                          typeof entry.name === "string"
+                        ) {
+                          return String(entry.name);
                         }
                         return "";
                       }}
