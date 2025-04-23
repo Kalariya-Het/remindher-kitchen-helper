@@ -115,8 +115,8 @@ const AnalysisPage = () => {
     const map: any = {};
     remindersQ.data.forEach(r => { map[r.type] = (map[r.type] || 0) + 1; });
     return Object.entries(map).map(([type, value]: any, i) => ({
-      name: type as string,
-      value: value as number,
+      name: String(type),
+      value: Number(value),
       color: COLORS[i % COLORS.length],
     }));
   }, [remindersQ.data]);
@@ -238,7 +238,7 @@ const AnalysisPage = () => {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label
+                      label={(entry) => String(entry.name)}
                       dataKey="value"
                     >
                       {reminderTypePie.map((entry, idx) =>
@@ -286,7 +286,7 @@ const AnalysisPage = () => {
                     data={[{ name: "Complete", value: taskCompletionRate }]}
                     startAngle={180} endAngle={-180}
                   >
-                    <RadialBar dataKey="value" clockWise fill={COLORS[0]} />
+                    <RadialBar dataKey="value" fill={COLORS[0]} />
                     <Legend iconSize={10} layout="vertical" verticalAlign="middle" align="right" />
                   </RadialBarChart>
                 </ResponsiveContainer>

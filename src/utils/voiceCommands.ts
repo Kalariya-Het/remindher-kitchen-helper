@@ -1,4 +1,3 @@
-
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/components/ui/use-toast";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -55,8 +54,8 @@ export const useVoiceCommandProcessor = () => {
       if (usernameMatch && usernameMatch[1]) {
         const username = usernameMatch[1];
         const password = usernameMatch[2] || "password"; // Demo only
-        
-        login(username, password)
+
+        login(username, password, {} as any) // provide a dummy third arg, or the proper type expected if needed
           .then(() => {
             toast({
               title: "Login Successful",
@@ -70,7 +69,7 @@ export const useVoiceCommandProcessor = () => {
               variant: "destructive",
             });
           });
-          
+
         return { wasProcessed: true, response: `Logging in as ${username}` };
       } else {
         return { wasProcessed: true, response: "Please say login with username and password" };
