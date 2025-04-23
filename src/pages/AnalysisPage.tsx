@@ -222,7 +222,9 @@ const AnalysisPage = () => {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={(entry: any) => String(entry?.name ?? "")}
+                      label={(entry: any): React.ReactNode => {
+                        return typeof entry?.name === "string" ? entry.name : "";
+                      }}
                       dataKey="value"
                     >
                       {reminderTypePie.map((entry, idx) =>
