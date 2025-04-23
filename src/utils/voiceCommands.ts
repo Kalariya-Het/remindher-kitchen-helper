@@ -18,11 +18,11 @@ export const useVoiceCommandProcessor = () => {
 
     // Theme commands
     if (lowerCommand.includes("switch to dark mode") || lowerCommand.includes("dark mode")) {
-      setThemeByVoice("dark", true); // Added second argument (true)
+      setThemeByVoice("dark"); // Fixed: Only 1 argument as per context definition
       return { wasProcessed: true, response: "Switched to dark mode" };
     } 
     if (lowerCommand.includes("switch to light mode") || lowerCommand.includes("light mode")) {
-      setThemeByVoice("light", true); // Added second argument (true)
+      setThemeByVoice("light"); // Fixed: Only 1 argument as per context definition
       return { wasProcessed: true, response: "Switched to light mode" };
     }
     
@@ -52,7 +52,7 @@ export const useVoiceCommandProcessor = () => {
         const password = usernameMatch[2] || "password"; // Demo only
 
         try {
-          await login(username, password);
+          await login(username, password, false); // Fix: Add a third argument as needed (example: false)
           toast({
             title: "Login Successful",
             description: `Welcome back, ${username}`,
@@ -77,7 +77,7 @@ export const useVoiceCommandProcessor = () => {
         const password = usernameMatch[2] || "password"; // Demo only
         
         try {
-          await register(username, password);
+          await register(username, password, false); // Fix: Add a third argument as needed (example: false)
           toast({
             title: "Registration Successful",
             description: `Account created for ${username}`,
