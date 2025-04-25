@@ -15,18 +15,88 @@ import { v4 as uuidv4 } from "uuid";
 import { toast as sonnerToast } from "sonner";
 import { speakText } from "@/utils/speechSynthesis";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const RemindersPage = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [activeReminders, setActiveReminders] = useState<{ [id: string]: boolean }>({});
   const [processingVoice, setProcessingVoice] = useState(false);
+  const [loading, setLoading] = useState(true);
   const { transcript } = useVoice();
   const { toast } = useToast();
+  const { user } = useAuth();
 
+  // Fetch reminders from Supabase
+  const fetchReminders = async () => {
+    setLoading(true);
+    try {
+      if (user) {
+        // First try to get from Supabase
+        const { data, error } = await supabase
+          .from('reminders')
+          .select('*')
+          .eq('user_id', user.id);
+          
+        if (error) {
+          console.error("Error fetching reminders from Supabase:", error);
+          // Fallback to local storage if Supabase fails
+          setReminders(getReminders());
+        } else if (data) {
+          // Map Supabase data to our Reminder model
+          const mappedReminders: Reminder[] = data.map(item => ({
+            id: item.id,
+            taskName: item.task_name,
+            date: item.date,
+            time: item.time,
+            type: item.type as "daily" | "once",
+            completed: item.completed || false
+          }));
+          setReminders(mappedReminders);
+          
+          // Also update local storage for offline access
+          mappedReminders.forEach(reminder => {
+            saveReminder(reminder, false); // Save without re-fetching
+          });
+        }
+      } else {
+        // Not logged in, use local storage
+        setReminders(getReminders());
+      }
+    } catch (error) {
+      console.error("Error in fetchReminders:", error);
+      // Fallback to local storage
+      setReminders(getReminders());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize by fetching reminders
   useEffect(() => {
-    setReminders(getReminders());
-  }, []);
+    fetchReminders();
+    
+    // Set up real-time subscription
+    if (user) {
+      const channel = supabase
+        .channel('public:reminders')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'reminders',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          // Refetch reminders when changes occur
+          fetchReminders();
+        })
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user]);
 
+  // Check for active reminders
   useEffect(() => {
     const checkReminders = () => {
       const now = new Date();
@@ -54,6 +124,7 @@ const RemindersPage = () => {
     return () => clearInterval(intervalId);
   }, [reminders, activeReminders]);
 
+  // Notification function
   const notifyReminder = (reminder: Reminder) => {
     speakText(`Reminder for ${reminder.taskName}`);
     
@@ -89,6 +160,7 @@ const RemindersPage = () => {
     }, 5 * 60 * 1000);
   };
 
+  // Process voice commands for reminders
   useEffect(() => {
     if (!transcript || processingVoice) return;
     
@@ -154,9 +226,36 @@ const RemindersPage = () => {
           
           console.log("Creating reminder:", newReminder);
           
-          saveReminder(newReminder);
-          
-          setReminders(getReminders());
+          // Save to Supabase first, then local storage
+          if (user) {
+            // Use Supabase
+            const { error } = await supabase
+              .from('reminders')
+              .insert({
+                id: newReminder.id,
+                task_name: newReminder.taskName,
+                date: newReminder.date,
+                time: newReminder.time,
+                type: newReminder.type,
+                completed: newReminder.completed,
+                user_id: user.id
+              });
+              
+            if (error) {
+              console.error("Error saving reminder to Supabase:", error);
+              // Fallback to local storage
+              saveReminder(newReminder);
+            } else {
+              // Save to local storage as backup
+              saveReminder(newReminder, false); // Don't trigger re-fetch from local storage
+              // Fetch from Supabase to ensure UI is up to date
+              fetchReminders();
+            }
+          } else {
+            // Not logged in, use local storage only
+            saveReminder(newReminder);
+            setReminders(getReminders());
+          }
           
           toast({
             title: "Reminder Set",
@@ -193,12 +292,35 @@ const RemindersPage = () => {
         setProcessingVoice(false);
       }, 1000);
     }
-  }, [transcript]);
+  }, [transcript, user]);
 
-  const handleToggleComplete = (reminder: Reminder) => {
+  // Toggle reminder completion
+  const handleToggleComplete = async (reminder: Reminder) => {
     const updatedReminder = { ...reminder, completed: !reminder.completed };
-    updateReminder(updatedReminder);
-    setReminders(getReminders());
+    
+    if (user) {
+      // Update in Supabase
+      const { error } = await supabase
+        .from('reminders')
+        .update({ completed: updatedReminder.completed })
+        .eq('id', reminder.id);
+        
+      if (error) {
+        console.error("Error updating reminder completion in Supabase:", error);
+        // Fallback to local storage
+        updateReminder(updatedReminder);
+        setReminders(getReminders());
+      } else {
+        // Update local storage
+        updateReminder(updatedReminder, false); // Don't trigger re-fetch
+        // Refresh from Supabase
+        fetchReminders();
+      }
+    } else {
+      // Not logged in, use local storage only
+      updateReminder(updatedReminder);
+      setReminders(getReminders());
+    }
     
     if (updatedReminder.completed) {
       setActiveReminders(prev => {
@@ -214,9 +336,31 @@ const RemindersPage = () => {
     }
   };
 
-  const handleDeleteReminder = (id: string) => {
-    deleteReminder(id);
-    setReminders(getReminders());
+  // Delete a reminder
+  const handleDeleteReminder = async (id: string) => {
+    if (user) {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('reminders')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Error deleting reminder from Supabase:", error);
+        // Fallback to local storage
+        deleteReminder(id);
+        setReminders(getReminders());
+      } else {
+        // Delete from local storage
+        deleteReminder(id, false); // Don't trigger re-fetch
+        // Refresh from Supabase
+        fetchReminders();
+      }
+    } else {
+      // Not logged in, use local storage only
+      deleteReminder(id);
+      setReminders(getReminders());
+    }
     
     setActiveReminders(prev => {
       const newState = { ...prev };
@@ -246,6 +390,17 @@ const RemindersPage = () => {
         
         <VoicePrompt />
         
+        {!user && (
+          <div className="my-4 p-4 bg-yellow-100 dark:bg-yellow-900 rounded-md">
+            <p className="text-yellow-800 dark:text-yellow-200">
+              You're not logged in. Reminders will be stored locally but won't sync across devices.
+              <Button variant="link" className="p-0 h-auto ml-2">
+                Login to sync
+              </Button>
+            </p>
+          </div>
+        )}
+        
         <Card className="mt-8">
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -254,7 +409,11 @@ const RemindersPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {reminders.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin h-8 w-8 border-4 border-remindher-teal border-t-transparent rounded-full"></div>
+              </div>
+            ) : reminders.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">No reminders yet.</p>
                 <p className="mt-2">Try saying "Set reminder for coffee on April 25th at 2:15 p.m., type once"</p>

@@ -1,4 +1,3 @@
-
 import { Reminder, Task, PantryItem, Conversation } from "@/models";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -14,7 +13,7 @@ export const getReminders = (): Reminder[] => {
   }
 };
 
-export const saveReminder = (reminder: Reminder): void => {
+export const saveReminder = (reminder: Reminder, shouldRefetch = true): void => {
   try {
     const reminders = getReminders();
     
@@ -22,39 +21,39 @@ export const saveReminder = (reminder: Reminder): void => {
     if (!reminders.some(r => r.id === reminder.id)) {
       reminders.push(reminder);
       localStorage.setItem("remindher-reminders", JSON.stringify(reminders));
-      console.log("Reminder saved successfully:", reminder);
+      console.log("Reminder saved successfully to local storage:", reminder);
     } else {
-      console.warn("Duplicate reminder not saved:", reminder);
+      console.warn("Duplicate reminder not saved to local storage:", reminder);
     }
   } catch (error) {
-    console.error("Error saving reminder:", error);
+    console.error("Error saving reminder to local storage:", error);
   }
 };
 
-export const updateReminder = (reminder: Reminder): void => {
+export const updateReminder = (reminder: Reminder, shouldRefetch = true): void => {
   try {
     const reminders = getReminders();
     const index = reminders.findIndex(r => r.id === reminder.id);
     if (index !== -1) {
       reminders[index] = reminder;
       localStorage.setItem("remindher-reminders", JSON.stringify(reminders));
-      console.log("Reminder updated successfully:", reminder);
+      console.log("Reminder updated successfully in local storage:", reminder);
     } else {
-      console.warn("Reminder not found for update:", reminder);
+      console.warn("Reminder not found for update in local storage:", reminder);
     }
   } catch (error) {
-    console.error("Error updating reminder:", error);
+    console.error("Error updating reminder in local storage:", error);
   }
 };
 
-export const deleteReminder = (id: string): void => {
+export const deleteReminder = (id: string, shouldRefetch = true): void => {
   try {
     const reminders = getReminders();
     const filteredReminders = reminders.filter(r => r.id !== id);
     localStorage.setItem("remindher-reminders", JSON.stringify(filteredReminders));
-    console.log("Reminder deleted successfully:", id);
+    console.log("Reminder deleted successfully from local storage:", id);
   } catch (error) {
-    console.error("Error deleting reminder:", error);
+    console.error("Error deleting reminder from local storage:", error);
   }
 };
 
