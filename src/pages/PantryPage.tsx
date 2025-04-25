@@ -26,11 +26,26 @@ const PantryPage = () => {
     // Process voice commands for pantry management
     if (!transcript) return;
 
-    // Example: "Rice, 5 kilograms"
-    const pantryMatch = transcript.match(/(.*?),\s*(.*)/i);
+    // Better pattern matching for various input formats
+    // Check for comma-separated format: "Rice, 5 kilograms"
+    const commaPattern = /^\s*([\w\s]+?)\s*,\s*([\w\s\d]+)\s*$/i;
+    // Also check for simple format: "wheat 10 kg"
+    const simplePattern = /^\s*([\w\s]+?)\s+(\d+[\w\s]*)\s*$/i;
 
-    if (pantryMatch) {
-      const [, name, quantity] = pantryMatch;
+    const commaMatch = transcript.match(commaPattern);
+    const simpleMatch = transcript.match(simplePattern);
+    
+    let name, quantity;
+
+    if (commaMatch) {
+      // If it matches comma pattern
+      [, name, quantity] = commaMatch;
+    } else if (simpleMatch) {
+      // If it matches simple pattern
+      [, name, quantity] = simpleMatch;
+    }
+
+    if (name && quantity) {
       const now = new Date();
       
       // Create new pantry item
@@ -41,6 +56,8 @@ const PantryPage = () => {
         date: format(now, "yyyy-MM-dd"),
         time: format(now, "HH:mm")
       };
+      
+      console.log("Creating pantry item:", newItem);
       
       // Save item
       savePantryItem(newItem);
@@ -110,7 +127,7 @@ const PantryPage = () => {
             {pantryItems.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Your pantry is empty.</p>
-                <p className="mt-2">Try saying "Rice, 5 kilograms"</p>
+                <p className="mt-2">Try saying "Rice, 5 kilograms" or "wheat 10 kg"</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -150,6 +167,7 @@ const PantryPage = () => {
           <h3 className="font-medium mb-2">Voice Commands</h3>
           <ul className="list-disc pl-5 space-y-1">
             <li className="text-sm">"[Item name], [quantity]" (e.g., "Rice, 5 kilograms")</li>
+            <li className="text-sm">"[Item name] [quantity]" (e.g., "wheat 10 kg")</li>
             <li className="text-sm">"What's in my pantry?"</li>
           </ul>
         </div>

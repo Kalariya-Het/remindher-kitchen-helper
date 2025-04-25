@@ -6,7 +6,7 @@ import { Reminder } from "@/models";
 import { useToast } from "@/components/ui/use-toast";
 import { useVoice } from "@/contexts/VoiceContext";
 import VoicePrompt from "@/components/VoicePrompt";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,8 +34,32 @@ const RemindersPage = () => {
       const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
       
       try {
-        // Parse date
-        const dateObj = new Date(dateStr);
+        // Try to parse the date more flexibly
+        let dateObj;
+        try {
+          // First attempt - try direct new Date parsing
+          dateObj = new Date(dateStr);
+          if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
+        } catch (e) {
+          // Second attempt - try to parse month format like "May 10th"
+          const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
+          if (monthMatch) {
+            const [, month, day] = monthMatch;
+            const year = new Date().getFullYear();
+            const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+            const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
+            
+            if (monthIndex !== -1) {
+              dateObj = new Date(year, monthIndex, parseInt(day));
+            } else {
+              throw new Error("Could not parse month name");
+            }
+          } else {
+            throw new Error("Could not parse date format");
+          }
+        }
+        
+        // Format the date to ISO format
         const dateFormatted = format(dateObj, "yyyy-MM-dd");
         
         // Create new reminder
@@ -43,10 +67,12 @@ const RemindersPage = () => {
           id: uuidv4(),
           taskName,
           date: dateFormatted,
-          time: timeStr,
+          time: timeStr.trim(),
           type: typeStr.toLowerCase() as "daily" | "once",
           completed: false
         };
+        
+        console.log("Creating reminder:", newReminder);
         
         // Save reminder
         saveReminder(newReminder);
@@ -57,7 +83,7 @@ const RemindersPage = () => {
         // Notify user
         toast({
           title: "Reminder Set",
-          description: `Reminder for ${taskName} set for ${dateStr} at ${timeStr}, ${typeStr}`,
+          description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeStr}, ${typeStr}`,
         });
       } catch (error) {
         console.error("Error parsing reminder:", error);
