@@ -166,132 +166,137 @@ const RemindersPage = () => {
     
     setProcessingVoice(true);
 
-    try {
-      const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
-
-      if (reminderMatch) {
-        const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
-        
-        try {
-          let dateObj;
+    const processVoiceCommand = async () => {
+      try {
+        const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
+  
+        if (reminderMatch) {
+          const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
+          
           try {
-            dateObj = new Date(dateStr);
-            if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
-          } catch (e) {
-            const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
-            if (monthMatch) {
-              const [, month, day] = monthMatch;
-              const year = new Date().getFullYear();
-              const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-              const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
-              
-              if (monthIndex !== -1) {
-                dateObj = new Date(year, monthIndex, parseInt(day));
+            let dateObj;
+            try {
+              dateObj = new Date(dateStr);
+              if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
+            } catch (e) {
+              const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
+              if (monthMatch) {
+                const [, month, day] = monthMatch;
+                const year = new Date().getFullYear();
+                const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+                const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
+                
+                if (monthIndex !== -1) {
+                  dateObj = new Date(year, monthIndex, parseInt(day));
+                } else {
+                  throw new Error("Could not parse month name");
+                }
               } else {
-                throw new Error("Could not parse month name");
+                throw new Error("Could not parse date format");
+              }
+            }
+            
+            const dateFormatted = format(dateObj, "yyyy-MM-dd");
+            
+            let timeFormatted = timeStr.trim();
+            
+            const timeTwelveHourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
+            if (timeTwelveHourMatch) {
+              let [, hours, minutes, period] = timeTwelveHourMatch;
+              let hr = parseInt(hours);
+              
+              if (period.toLowerCase().includes('p') && hr < 12) {
+                hr += 12;
+              } else if (period.toLowerCase().includes('a') && hr === 12) {
+                hr = 0;
+              }
+              
+              const formattedHr = hr.toString().padStart(2, '0');
+              const formattedMin = (minutes || '00').padStart(2, '0');
+              timeFormatted = `${formattedHr}:${formattedMin}`;
+            }
+            
+            const newReminder: Reminder = {
+              id: uuidv4(),
+              taskName,
+              date: dateFormatted,
+              time: timeFormatted,
+              type: typeStr.toLowerCase() as "daily" | "once",
+              completed: false
+            };
+            
+            console.log("Creating reminder:", newReminder);
+            
+            // Save to Supabase first, then local storage
+            if (user) {
+              // Use Supabase
+              const { error } = await supabase
+                .from('reminders')
+                .insert({
+                  id: newReminder.id,
+                  task_name: newReminder.taskName,
+                  date: newReminder.date,
+                  time: newReminder.time,
+                  type: newReminder.type,
+                  completed: newReminder.completed,
+                  user_id: user.id
+                });
+                
+              if (error) {
+                console.error("Error saving reminder to Supabase:", error);
+                // Fallback to local storage
+                saveReminder(newReminder);
+              } else {
+                // Save to local storage as backup
+                saveReminder(newReminder, false); // Don't trigger re-fetch from local storage
+                // Fetch from Supabase to ensure UI is up to date
+                fetchReminders();
               }
             } else {
-              throw new Error("Could not parse date format");
-            }
-          }
-          
-          const dateFormatted = format(dateObj, "yyyy-MM-dd");
-          
-          let timeFormatted = timeStr.trim();
-          
-          const timeTwelveHourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
-          if (timeTwelveHourMatch) {
-            let [, hours, minutes, period] = timeTwelveHourMatch;
-            let hr = parseInt(hours);
-            
-            if (period.toLowerCase().includes('p') && hr < 12) {
-              hr += 12;
-            } else if (period.toLowerCase().includes('a') && hr === 12) {
-              hr = 0;
-            }
-            
-            const formattedHr = hr.toString().padStart(2, '0');
-            const formattedMin = (minutes || '00').padStart(2, '0');
-            timeFormatted = `${formattedHr}:${formattedMin}`;
-          }
-          
-          const newReminder: Reminder = {
-            id: uuidv4(),
-            taskName,
-            date: dateFormatted,
-            time: timeFormatted,
-            type: typeStr.toLowerCase() as "daily" | "once",
-            completed: false
-          };
-          
-          console.log("Creating reminder:", newReminder);
-          
-          // Save to Supabase first, then local storage
-          if (user) {
-            // Use Supabase
-            const { error } = await supabase
-              .from('reminders')
-              .insert({
-                id: newReminder.id,
-                task_name: newReminder.taskName,
-                date: newReminder.date,
-                time: newReminder.time,
-                type: newReminder.type,
-                completed: newReminder.completed,
-                user_id: user.id
-              });
-              
-            if (error) {
-              console.error("Error saving reminder to Supabase:", error);
-              // Fallback to local storage
+              // Not logged in, use local storage only
               saveReminder(newReminder);
-            } else {
-              // Save to local storage as backup
-              saveReminder(newReminder, false); // Don't trigger re-fetch from local storage
-              // Fetch from Supabase to ensure UI is up to date
-              fetchReminders();
+              setReminders(getReminders());
             }
-          } else {
-            // Not logged in, use local storage only
-            saveReminder(newReminder);
-            setReminders(getReminders());
+            
+            toast({
+              title: "Reminder Set",
+              description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}, ${typeStr}`,
+            });
+          } catch (error) {
+            console.error("Error parsing reminder:", error);
+            toast({
+              title: "Error Setting Reminder",
+              description: "Please try again with a valid date and time format",
+              variant: "destructive",
+            });
           }
-          
-          toast({
-            title: "Reminder Set",
-            description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}, ${typeStr}`,
-          });
-        } catch (error) {
-          console.error("Error parsing reminder:", error);
-          toast({
-            title: "Error Setting Reminder",
-            description: "Please try again with a valid date and time format",
-            variant: "destructive",
-          });
+        } else if (transcript.toLowerCase().includes("what are my reminders")) {
+          if (reminders.length === 0) {
+            toast({
+              title: "Reminders",
+              description: "You have no reminders set",
+            });
+          } else {
+            const reminderSummary = reminders
+              .slice(0, 3)
+              .map(r => `${r.taskName} on ${r.date} at ${r.time}`)
+              .join(", ");
+            
+            toast({
+              title: "Your Reminders",
+              description: reminderSummary + (reminders.length > 3 ? ` and ${reminders.length - 3} more` : ""),
+            });
+          }
         }
-      } else if (transcript.toLowerCase().includes("what are my reminders")) {
-        if (reminders.length === 0) {
-          toast({
-            title: "Reminders",
-            description: "You have no reminders set",
-          });
-        } else {
-          const reminderSummary = reminders
-            .slice(0, 3)
-            .map(r => `${r.taskName} on ${r.date} at ${r.time}`)
-            .join(", ");
-          
-          toast({
-            title: "Your Reminders",
-            description: reminderSummary + (reminders.length > 3 ? ` and ${reminders.length - 3} more` : ""),
-          });
-        }
+      } finally {
+        setTimeout(() => {
+          setProcessingVoice(false);
+        }, 1000);
       }
-    } finally {
-      setTimeout(() => {
-        setProcessingVoice(false);
-      }, 1000);
-    }
+    };
+    
+    // Call the async function
+    processVoiceCommand();
   }, [transcript, user]);
 
   // Toggle reminder completion
