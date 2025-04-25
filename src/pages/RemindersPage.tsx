@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { getReminders, saveReminder, updateReminder, deleteReminder } from "@/services/storage";
@@ -24,11 +23,9 @@ const RemindersPage = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load saved reminders
     setReminders(getReminders());
   }, []);
 
-  // Check for due reminders every minute
   useEffect(() => {
     const checkReminders = () => {
       const now = new Date();
@@ -42,92 +39,73 @@ const RemindersPage = () => {
           
           const isToday = reminderDate === currentDate;
           
-          // Check if reminder time is now or has just passed (within the last minute)
           if (isToday && reminderTime === currentTime.substring(0, 5)) {
-            // Mark this reminder as active so we don't notify multiple times
             setActiveReminders(prev => ({ ...prev, [reminder.id]: true }));
-            
-            // Show notification with snooze/complete options
             notifyReminder(reminder);
           }
         }
       });
     };
     
-    // Check immediately on first load
     checkReminders();
     
-    // Set interval to check every minute
     const intervalId = setInterval(checkReminders, 60000);
     return () => clearInterval(intervalId);
   }, [reminders, activeReminders]);
 
   const notifyReminder = (reminder: Reminder) => {
-    // Speak notification
     speakText(`Reminder for ${reminder.taskName}`);
     
-    // Show toast with actions
-    sonnerToast(
-      "Reminder Time",
-      `It's time for: ${reminder.taskName}`,
-      {
-        duration: 60000, // Stay for 1 minute
-        action: {
-          label: "Complete",
-          onClick: () => handleToggleComplete(reminder)
-        },
-        cancel: {
-          label: "Snooze 5m",
-          onClick: () => snoozeReminder(reminder)
-        },
-        onDismiss: () => snoozeReminder(reminder)
-      }
-    );
+    sonnerToast({
+      title: "Reminder Time",
+      description: `It's time for: ${reminder.taskName}`,
+      duration: 60000,
+      action: {
+        label: "Complete",
+        onClick: () => handleToggleComplete(reminder)
+      },
+      cancel: {
+        label: "Snooze 5m",
+        onClick: () => snoozeReminder(reminder)
+      },
+      onDismiss: () => snoozeReminder(reminder)
+    });
   };
 
   const snoozeReminder = (reminder: Reminder) => {
-    // Remove from active reminders so it can trigger again
     setActiveReminders(prev => {
       const newState = { ...prev };
       delete newState[reminder.id];
       return newState;
     });
     
-    // Show toast
     toast({
       title: "Reminder Snoozed",
       description: `${reminder.taskName} will remind you again in 5 minutes`
     });
     
-    // Schedule snooze
     setTimeout(() => {
       notifyReminder(reminder);
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 5 * 60 * 1000);
   };
 
   useEffect(() => {
-    // Process voice commands for setting reminders
     if (!transcript || processingVoice) return;
     
-    // Prevent duplicate processing
     setProcessingVoice(true);
 
     try {
-      // Example: "Set reminder for laundry on April 10th at 3 PM, type once"
       const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
 
       if (reminderMatch) {
         const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
         
         try {
-          // Try to parse the date more flexibly
           let dateObj;
           try {
-            // First attempt - try direct new Date parsing
             dateObj = new Date(dateStr);
             if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
           } catch (e) {
-            // Second attempt - try to parse month format like "May 10th"
             const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
             if (monthMatch) {
               const [, month, day] = monthMatch;
@@ -145,32 +123,26 @@ const RemindersPage = () => {
             }
           }
           
-          // Format the date to ISO format
           const dateFormatted = format(dateObj, "yyyy-MM-dd");
           
-          // Parse the time
           let timeFormatted = timeStr.trim();
           
-          // Try to convert 12-hour format (like "2:15 p.m.") to 24-hour format ("14:15")
           const timeTwelveHourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
           if (timeTwelveHourMatch) {
             let [, hours, minutes, period] = timeTwelveHourMatch;
             let hr = parseInt(hours);
             
-            // Convert to 24-hour format
             if (period.toLowerCase().includes('p') && hr < 12) {
               hr += 12;
             } else if (period.toLowerCase().includes('a') && hr === 12) {
               hr = 0;
             }
             
-            // Format properly with leading zeros
             const formattedHr = hr.toString().padStart(2, '0');
             const formattedMin = (minutes || '00').padStart(2, '0');
             timeFormatted = `${formattedHr}:${formattedMin}`;
           }
           
-          // Create new reminder
           const newReminder: Reminder = {
             id: uuidv4(),
             taskName,
@@ -182,13 +154,10 @@ const RemindersPage = () => {
           
           console.log("Creating reminder:", newReminder);
           
-          // Save reminder
           saveReminder(newReminder);
           
-          // Update UI
           setReminders(getReminders());
           
-          // Notify user
           toast({
             title: "Reminder Set",
             description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}, ${typeStr}`,
@@ -202,7 +171,6 @@ const RemindersPage = () => {
           });
         }
       } else if (transcript.toLowerCase().includes("what are my reminders")) {
-        // Read out reminders
         if (reminders.length === 0) {
           toast({
             title: "Reminders",
@@ -221,7 +189,6 @@ const RemindersPage = () => {
         }
       }
     } finally {
-      // Reset processing flag with a small delay
       setTimeout(() => {
         setProcessingVoice(false);
       }, 1000);
@@ -234,7 +201,6 @@ const RemindersPage = () => {
     setReminders(getReminders());
     
     if (updatedReminder.completed) {
-      // Clear from active reminders when completed
       setActiveReminders(prev => {
         const newState = { ...prev };
         delete newState[reminder.id];
@@ -252,7 +218,6 @@ const RemindersPage = () => {
     deleteReminder(id);
     setReminders(getReminders());
     
-    // Clear from active reminders if deleted
     setActiveReminders(prev => {
       const newState = { ...prev };
       delete newState[id];
