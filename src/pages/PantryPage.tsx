@@ -12,17 +12,80 @@ import { Button } from "@/components/ui/button";
 import { ShoppingCart, Clock, Trash2 } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast as sonnerToast } from "sonner";
 
 const PantryPage = () => {
   const [pantryItems, setPantryItems] = useState<PantryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const { transcript } = useVoice();
   const { toast } = useToast();
   const [processingVoice, setProcessingVoice] = useState(false);
+  const [processingItem, setProcessingItem] = useState<string | null>(null);
+  const { user } = useAuth();
 
+  // Fetch pantry items from Supabase
+  const fetchPantryItems = async () => {
+    setLoading(true);
+    try {
+      if (user) {
+        // First try to get from Supabase
+        const { data, error } = await supabase
+          .from('pantry_items')
+          .select('*')
+          .eq('user_id', user.id);
+          
+        if (error) {
+          console.error("Error fetching pantry items from Supabase:", error);
+          // Fallback to local storage if Supabase fails
+          setPantryItems(getPantryItems());
+        } else if (data) {
+          // Map Supabase data to our PantryItem model
+          const mappedItems: PantryItem[] = data.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity.toString(),
+            date: format(new Date(item.created_at || new Date()), "yyyy-MM-dd"),
+            time: format(new Date(item.created_at || new Date()), "HH:mm")
+          }));
+          setPantryItems(mappedItems);
+        }
+      } else {
+        // Not logged in, use local storage
+        setPantryItems(getPantryItems());
+      }
+    } catch (error) {
+      console.error("Error in fetchPantryItems:", error);
+      // Fallback to local storage
+      setPantryItems(getPantryItems());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize by fetching pantry items
   useEffect(() => {
-    // Load saved pantry items
-    setPantryItems(getPantryItems());
-  }, []);
+    fetchPantryItems();
+    
+    // Set up real-time subscription
+    if (user) {
+      const channel = supabase
+        .channel('public:pantry_items')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'pantry_items',
+          filter: `user_id=eq.${user.id}`
+        }, () => {
+          fetchPantryItems();
+        })
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [user]);
 
   useEffect(() => {
     // Process voice commands for pantry management
@@ -31,81 +94,147 @@ const PantryPage = () => {
     // Prevent duplicate processing
     setProcessingVoice(true);
 
-    try {
-      // Better pattern matching for various input formats
-      // Check for comma-separated format: "Rice, 5 kilograms"
-      const commaPattern = /^\s*([\w\s]+?)\s*,\s*([\w\s\d]+)\s*$/i;
-      // Also check for simple format: "wheat 10 kg"
-      const simplePattern = /^\s*([\w\s]+?)\s+(\d+[\w\s]*)\s*$/i;
+    const processVoiceCommand = async () => {
+      try {
+        // Better pattern matching for various input formats
+        // Check for comma-separated format: "Rice, 5 kilograms"
+        const commaPattern = /^\s*([\w\s]+?)\s*,\s*([\w\s\d]+)\s*$/i;
+        // Also check for simple format: "wheat 10 kg"
+        const simplePattern = /^\s*([\w\s]+?)\s+(\d+[\w\s]*)\s*$/i;
 
-      const commaMatch = transcript.match(commaPattern);
-      const simpleMatch = transcript.match(simplePattern);
-      
-      let name, quantity;
+        const commaMatch = transcript.match(commaPattern);
+        const simpleMatch = transcript.match(simplePattern);
+        
+        let name, quantity;
 
-      if (commaMatch) {
-        // If it matches comma pattern
-        [, name, quantity] = commaMatch;
-      } else if (simpleMatch) {
-        // If it matches simple pattern
-        [, name, quantity] = simpleMatch;
-      }
-
-      if (name && quantity) {
-        const now = new Date();
-        
-        // Create new pantry item
-        const newItem: PantryItem = {
-          id: uuidv4(),
-          name: name.trim(),
-          quantity: quantity.trim(),
-          date: format(now, "yyyy-MM-dd"),
-          time: format(now, "HH:mm")
-        };
-        
-        console.log("Creating pantry item:", newItem);
-        
-        // Save item
-        savePantryItem(newItem);
-        
-        // Update UI
-        setPantryItems(getPantryItems());
-        
-        // Notify user
-        toast({
-          title: "Pantry Item Added",
-          description: `Added ${quantity} of ${name} to your pantry`,
-        });
-      } else if (transcript.toLowerCase().includes("what's in my pantry")) {
-        // Read out pantry items
-        if (pantryItems.length === 0) {
-          toast({
-            title: "Pantry",
-            description: "Your pantry is empty",
-          });
-        } else {
-          const itemSummary = pantryItems
-            .slice(0, 3)
-            .map(item => `${item.quantity} of ${item.name}`)
-            .join(", ");
-          
-          toast({
-            title: "Your Pantry",
-            description: itemSummary + (pantryItems.length > 3 ? ` and ${pantryItems.length - 3} more items` : ""),
-          });
+        if (commaMatch) {
+          // If it matches comma pattern
+          [, name, quantity] = commaMatch;
+        } else if (simpleMatch) {
+          // If it matches simple pattern
+          [, name, quantity] = simpleMatch;
         }
-      }
-    } finally {
-      // Reset processing flag
-      setTimeout(() => {
-        setProcessingVoice(false);
-      }, 1000); // Add a small delay to prevent immediate re-processing
-    }
-  }, [transcript, pantryItems]);
 
-  const handleDeleteItem = (id: string) => {
-    deletePantryItem(id);
-    setPantryItems(getPantryItems());
+        if (name && quantity) {
+          // Check if we're already processing this exact item
+          const itemKey = `${name}-${quantity}`;
+          
+          if (itemKey === processingItem) {
+            console.log("Already processing this pantry item, skipping duplicate");
+            return;
+          }
+          
+          // Set this item as being processed to prevent duplicates
+          setProcessingItem(itemKey);
+        
+          const now = new Date();
+          
+          // Check if this item already exists
+          const existingItem = pantryItems.find(item => 
+            item.name.toLowerCase() === name.trim().toLowerCase()
+          );
+          
+          if (existingItem) {
+            // For existing items, consider updating the quantity instead
+            toast({
+              title: "Similar Item Exists",
+              description: `You already have "${name}" in your pantry. Adding as new item.`,
+            });
+          }
+          
+          // Create new pantry item
+          const newItem: PantryItem = {
+            id: uuidv4(),
+            name: name.trim(),
+            quantity: quantity.trim(),
+            date: format(now, "yyyy-MM-dd"),
+            time: format(now, "HH:mm")
+          };
+          
+          if (user) {
+            // Save to Supabase
+            const { error } = await supabase
+              .from('pantry_items')
+              .insert({
+                id: newItem.id,
+                name: newItem.name,
+                quantity: parseInt(quantity) || 0,
+                user_id: user.id
+              });
+              
+            if (error) {
+              console.error("Error saving pantry item to Supabase:", error);
+              // Fallback to local storage
+              savePantryItem(newItem);
+              setPantryItems(getPantryItems());
+            } else {
+              fetchPantryItems();
+            }
+          } else {
+            // Not logged in, use local storage only
+            savePantryItem(newItem);
+            setPantryItems(getPantryItems());
+          }
+          
+          // Notify user with enhanced toast
+          sonnerToast("Pantry Item Added", {
+            description: `Added ${quantity} of ${name} to your pantry`,
+            className: "w-[400px] p-6 rounded-lg bg-gray-900 text-white font-medium"
+          });
+          
+        } else if (transcript.toLowerCase().includes("what's in my pantry")) {
+          // Read out pantry items
+          if (pantryItems.length === 0) {
+            toast({
+              title: "Pantry",
+              description: "Your pantry is empty",
+            });
+          } else {
+            const itemSummary = pantryItems
+              .slice(0, 3)
+              .map(item => `${item.quantity} of ${item.name}`)
+              .join(", ");
+            
+            toast({
+              title: "Your Pantry",
+              description: itemSummary + (pantryItems.length > 3 ? ` and ${pantryItems.length - 3} more items` : ""),
+            });
+          }
+        }
+      } finally {
+        // Reset processing flags
+        setTimeout(() => {
+          setProcessingVoice(false);
+          setProcessingItem(null);
+        }, 1000);
+      }
+    };
+    
+    processVoiceCommand();
+  }, [transcript, pantryItems, processingVoice, processingItem, user]);
+
+  const handleDeleteItem = async (id: string) => {
+    if (user) {
+      // Delete from Supabase
+      const { error } = await supabase
+        .from('pantry_items')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Error deleting pantry item from Supabase:", error);
+        // Fallback to local storage
+        deletePantryItem(id);
+        setPantryItems(getPantryItems());
+      } else {
+        fetchPantryItems();
+      }
+    } else {
+      // Not logged in, use local storage only
+      deletePantryItem(id);
+      setPantryItems(getPantryItems());
+    }
+    
     toast({
       title: "Item Deleted",
       description: "Item has been removed from your pantry",
@@ -128,6 +257,17 @@ const PantryPage = () => {
         
         <VoicePrompt />
         
+        {!user && (
+          <div className="my-4 p-4 bg-yellow-100 dark:bg-yellow-900 rounded-md">
+            <p className="text-yellow-800 dark:text-yellow-200">
+              You're not logged in. Pantry items will be stored locally but won't sync across devices.
+              <Button variant="link" className="p-0 h-auto ml-2">
+                Login to sync
+              </Button>
+            </p>
+          </div>
+        )}
+        
         <Card className="mt-8">
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -136,7 +276,11 @@ const PantryPage = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {pantryItems.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin h-8 w-8 border-4 border-remindher-teal border-t-transparent rounded-full"></div>
+              </div>
+            ) : pantryItems.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">Your pantry is empty.</p>
                 <p className="mt-2">Try saying "Rice, 5 kilograms" or "wheat 10 kg"</p>

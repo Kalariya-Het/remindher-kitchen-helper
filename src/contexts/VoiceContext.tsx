@@ -4,6 +4,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useVoiceCommandProcessor } from "@/utils/voiceCommands";
 import { speakText } from "@/utils/speechSynthesis";
+import { toast as sonnerToast } from "sonner";
 
 interface VoiceContextType {
   isListening: boolean;
@@ -55,9 +56,12 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Function to respond to user after processing commands
   const respondToUser = (message: string) => {
     setVoiceResponse(message);
-    toast({
-      title: "RemindHer",
+    
+    // Use sonner toast for enhanced UI
+    sonnerToast("RemindHer", {
       description: message,
+      className: "w-[400px] p-6 rounded-lg bg-gray-900 text-white font-medium",
+      duration: 5000
     });
     
     // Use the speech synthesis utility
@@ -92,4 +96,3 @@ export const useVoice = (): VoiceContextType => {
   
   return context;
 };
-

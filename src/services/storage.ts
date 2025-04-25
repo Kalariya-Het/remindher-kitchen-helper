@@ -1,3 +1,4 @@
+
 import { Reminder, Task, PantryItem, Conversation } from "@/models";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -69,45 +70,95 @@ export const getTasks = (): Task[] => {
   }
 };
 
-export const saveTask = (task: Task): void => {
+export const saveTask = async (task: Task, user = null): Promise<void> => {
   try {
+    // Try to save to Supabase if user is logged in
+    if (user) {
+      const { error } = await supabase
+        .from('tasks')
+        .insert({
+          id: task.id,
+          work: task.work,
+          worker: task.worker,
+          completed: task.completed,
+          date: task.date,
+          user_id: user.id
+        });
+        
+      if (error) {
+        console.error("Error saving task to Supabase:", error);
+      }
+    }
+    
+    // Also save to local storage as backup/offline access
     const tasks = getTasks();
     
     // Check for duplicates before adding
     if (!tasks.some(t => t.id === task.id)) {
       tasks.push(task);
       localStorage.setItem("remindher-tasks", JSON.stringify(tasks));
-      console.log("Task saved successfully:", task);
+      console.log("Task saved successfully to local storage:", task);
     } else {
-      console.warn("Duplicate task not saved:", task);
+      console.warn("Duplicate task not saved to local storage:", task);
     }
   } catch (error) {
     console.error("Error saving task:", error);
   }
 };
 
-export const updateTask = (task: Task): void => {
+export const updateTask = async (task: Task, user = null): Promise<void> => {
   try {
+    // Try to update in Supabase if user is logged in
+    if (user) {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          work: task.work,
+          worker: task.worker,
+          completed: task.completed,
+          date: task.date
+        })
+        .eq('id', task.id);
+        
+      if (error) {
+        console.error("Error updating task in Supabase:", error);
+      }
+    }
+    
+    // Also update in local storage
     const tasks = getTasks();
     const index = tasks.findIndex(t => t.id === task.id);
     if (index !== -1) {
       tasks[index] = task;
       localStorage.setItem("remindher-tasks", JSON.stringify(tasks));
-      console.log("Task updated successfully:", task);
+      console.log("Task updated successfully in local storage:", task);
     } else {
-      console.warn("Task not found for update:", task);
+      console.warn("Task not found for update in local storage:", task);
     }
   } catch (error) {
     console.error("Error updating task:", error);
   }
 };
 
-export const deleteTask = (id: string): void => {
+export const deleteTask = async (id: string, user = null): Promise<void> => {
   try {
+    // Try to delete from Supabase if user is logged in
+    if (user) {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Error deleting task from Supabase:", error);
+      }
+    }
+    
+    // Also delete from local storage
     const tasks = getTasks();
     const filteredTasks = tasks.filter(t => t.id !== id);
     localStorage.setItem("remindher-tasks", JSON.stringify(filteredTasks));
-    console.log("Task deleted successfully:", id);
+    console.log("Task deleted successfully from local storage:", id);
   } catch (error) {
     console.error("Error deleting task:", error);
   }

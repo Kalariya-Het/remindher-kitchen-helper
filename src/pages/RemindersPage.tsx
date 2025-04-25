@@ -22,6 +22,7 @@ const RemindersPage = () => {
   const [activeReminders, setActiveReminders] = useState<{ [id: string]: boolean }>({});
   const [processingVoice, setProcessingVoice] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [processingReminder, setProcessingReminder] = useState<string | null>(null);
   const { transcript } = useVoice();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -131,6 +132,7 @@ const RemindersPage = () => {
     sonnerToast("Reminder Time", {
       description: `It's time for: ${reminder.taskName}`,
       duration: 60000,
+      className: "w-[400px] p-6 rounded-lg bg-gray-900 text-white font-medium", // Enhanced toast styling
       action: {
         label: "Complete",
         onClick: () => handleToggleComplete(reminder)
@@ -166,12 +168,25 @@ const RemindersPage = () => {
     
     setProcessingVoice(true);
 
+    // Create a separate async function to handle the processing
     const processVoiceCommand = async () => {
       try {
+        // Check if the transcript matches our reminder pattern
         const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
   
         if (reminderMatch) {
           const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
+          
+          // Check if we're already processing this exact reminder
+          const reminderKey = `${taskName}-${dateStr}-${timeStr}-${typeStr}`;
+          
+          if (reminderKey === processingReminder) {
+            console.log("Already processing this reminder, skipping duplicate");
+            return;
+          }
+          
+          // Set this reminder as being processed to prevent duplicates
+          setProcessingReminder(reminderKey);
           
           try {
             let dateObj;
@@ -214,6 +229,22 @@ const RemindersPage = () => {
               const formattedHr = hr.toString().padStart(2, '0');
               const formattedMin = (minutes || '00').padStart(2, '0');
               timeFormatted = `${formattedHr}:${formattedMin}`;
+            }
+            
+            // Check if this reminder already exists to prevent duplicates
+            const existingReminder = reminders.find(r => 
+              r.taskName === taskName && 
+              r.date === dateFormatted && 
+              r.time === timeFormatted
+            );
+            
+            if (existingReminder) {
+              console.log("Reminder already exists, not creating duplicate");
+              toast({
+                title: "Reminder Already Exists",
+                description: `You already have a reminder set for ${taskName} on ${format(dateObj, "MMM d")} at ${timeFormatted}`,
+              });
+              return;
             }
             
             const newReminder: Reminder = {
@@ -291,13 +322,14 @@ const RemindersPage = () => {
       } finally {
         setTimeout(() => {
           setProcessingVoice(false);
+          setProcessingReminder(null);
         }, 1000);
       }
     };
     
     // Call the async function
     processVoiceCommand();
-  }, [transcript, user]);
+  }, [transcript, processingVoice, processingReminder, reminders, user]);
 
   // Toggle reminder completion
   const handleToggleComplete = async (reminder: Reminder) => {
