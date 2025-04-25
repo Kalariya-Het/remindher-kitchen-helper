@@ -6,16 +6,21 @@ import { Reminder } from "@/models";
 import { useToast } from "@/components/ui/use-toast";
 import { useVoice } from "@/contexts/VoiceContext";
 import VoicePrompt from "@/components/VoicePrompt";
-import { format, parse } from "date-fns";
+import { format, parse, isEqual, isBefore } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Bell, Clock, Calendar, Trash2 } from "lucide-react";
+import { Bell, Clock, Calendar, Trash2, Check, X } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
+import { toast as sonnerToast } from "sonner";
+import { speakText } from "@/utils/speechSynthesis";
+import { supabase } from "@/integrations/supabase/client";
 
 const RemindersPage = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
-  const { transcript, voiceResponse } = useVoice();
+  const [activeReminders, setActiveReminders] = useState<{ [id: string]: boolean }>({});
+  const [processingVoice, setProcessingVoice] = useState(false);
+  const { transcript } = useVoice();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -23,94 +28,203 @@ const RemindersPage = () => {
     setReminders(getReminders());
   }, []);
 
+  // Check for due reminders every minute
   useEffect(() => {
-    // Process voice commands for setting reminders
-    if (!transcript) return;
-
-    // Example: "Set reminder for laundry on April 10th at 3 PM, type once"
-    const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
-
-    if (reminderMatch) {
-      const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
+    const checkReminders = () => {
+      const now = new Date();
+      const currentDate = format(now, "yyyy-MM-dd");
+      const currentTime = format(now, "HH:mm");
       
-      try {
-        // Try to parse the date more flexibly
-        let dateObj;
-        try {
-          // First attempt - try direct new Date parsing
-          dateObj = new Date(dateStr);
-          if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
-        } catch (e) {
-          // Second attempt - try to parse month format like "May 10th"
-          const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
-          if (monthMatch) {
-            const [, month, day] = monthMatch;
-            const year = new Date().getFullYear();
-            const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-            const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
+      reminders.forEach(reminder => {
+        if (!reminder.completed && !activeReminders[reminder.id]) {
+          const reminderDate = reminder.date;
+          const reminderTime = reminder.time;
+          
+          const isToday = reminderDate === currentDate;
+          
+          // Check if reminder time is now or has just passed (within the last minute)
+          if (isToday && reminderTime === currentTime.substring(0, 5)) {
+            // Mark this reminder as active so we don't notify multiple times
+            setActiveReminders(prev => ({ ...prev, [reminder.id]: true }));
             
-            if (monthIndex !== -1) {
-              dateObj = new Date(year, monthIndex, parseInt(day));
-            } else {
-              throw new Error("Could not parse month name");
-            }
-          } else {
-            throw new Error("Could not parse date format");
+            // Show notification with snooze/complete options
+            notifyReminder(reminder);
           }
         }
-        
-        // Format the date to ISO format
-        const dateFormatted = format(dateObj, "yyyy-MM-dd");
-        
-        // Create new reminder
-        const newReminder: Reminder = {
-          id: uuidv4(),
-          taskName,
-          date: dateFormatted,
-          time: timeStr.trim(),
-          type: typeStr.toLowerCase() as "daily" | "once",
-          completed: false
-        };
-        
-        console.log("Creating reminder:", newReminder);
-        
-        // Save reminder
-        saveReminder(newReminder);
-        
-        // Update UI
-        setReminders(getReminders());
-        
-        // Notify user
-        toast({
-          title: "Reminder Set",
-          description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeStr}, ${typeStr}`,
-        });
-      } catch (error) {
-        console.error("Error parsing reminder:", error);
-        toast({
-          title: "Error Setting Reminder",
-          description: "Please try again with a valid date and time format",
-          variant: "destructive",
-        });
+      });
+    };
+    
+    // Check immediately on first load
+    checkReminders();
+    
+    // Set interval to check every minute
+    const intervalId = setInterval(checkReminders, 60000);
+    return () => clearInterval(intervalId);
+  }, [reminders, activeReminders]);
+
+  const notifyReminder = (reminder: Reminder) => {
+    // Speak notification
+    speakText(`Reminder for ${reminder.taskName}`);
+    
+    // Show toast with actions
+    sonnerToast(
+      "Reminder Time",
+      `It's time for: ${reminder.taskName}`,
+      {
+        duration: 60000, // Stay for 1 minute
+        action: {
+          label: "Complete",
+          onClick: () => handleToggleComplete(reminder)
+        },
+        cancel: {
+          label: "Snooze 5m",
+          onClick: () => snoozeReminder(reminder)
+        },
+        onDismiss: () => snoozeReminder(reminder)
       }
-    } else if (transcript.toLowerCase().includes("what are my reminders")) {
-      // Read out reminders
-      if (reminders.length === 0) {
-        toast({
-          title: "Reminders",
-          description: "You have no reminders set",
-        });
-      } else {
-        const reminderSummary = reminders
-          .slice(0, 3)
-          .map(r => `${r.taskName} on ${r.date} at ${r.time}`)
-          .join(", ");
+    );
+  };
+
+  const snoozeReminder = (reminder: Reminder) => {
+    // Remove from active reminders so it can trigger again
+    setActiveReminders(prev => {
+      const newState = { ...prev };
+      delete newState[reminder.id];
+      return newState;
+    });
+    
+    // Show toast
+    toast({
+      title: "Reminder Snoozed",
+      description: `${reminder.taskName} will remind you again in 5 minutes`
+    });
+    
+    // Schedule snooze
+    setTimeout(() => {
+      notifyReminder(reminder);
+    }, 5 * 60 * 1000); // 5 minutes
+  };
+
+  useEffect(() => {
+    // Process voice commands for setting reminders
+    if (!transcript || processingVoice) return;
+    
+    // Prevent duplicate processing
+    setProcessingVoice(true);
+
+    try {
+      // Example: "Set reminder for laundry on April 10th at 3 PM, type once"
+      const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
+
+      if (reminderMatch) {
+        const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
         
-        toast({
-          title: "Your Reminders",
-          description: reminderSummary + (reminders.length > 3 ? ` and ${reminders.length - 3} more` : ""),
-        });
+        try {
+          // Try to parse the date more flexibly
+          let dateObj;
+          try {
+            // First attempt - try direct new Date parsing
+            dateObj = new Date(dateStr);
+            if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
+          } catch (e) {
+            // Second attempt - try to parse month format like "May 10th"
+            const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
+            if (monthMatch) {
+              const [, month, day] = monthMatch;
+              const year = new Date().getFullYear();
+              const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+              const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
+              
+              if (monthIndex !== -1) {
+                dateObj = new Date(year, monthIndex, parseInt(day));
+              } else {
+                throw new Error("Could not parse month name");
+              }
+            } else {
+              throw new Error("Could not parse date format");
+            }
+          }
+          
+          // Format the date to ISO format
+          const dateFormatted = format(dateObj, "yyyy-MM-dd");
+          
+          // Parse the time
+          let timeFormatted = timeStr.trim();
+          
+          // Try to convert 12-hour format (like "2:15 p.m.") to 24-hour format ("14:15")
+          const timeTwelveHourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
+          if (timeTwelveHourMatch) {
+            let [, hours, minutes, period] = timeTwelveHourMatch;
+            let hr = parseInt(hours);
+            
+            // Convert to 24-hour format
+            if (period.toLowerCase().includes('p') && hr < 12) {
+              hr += 12;
+            } else if (period.toLowerCase().includes('a') && hr === 12) {
+              hr = 0;
+            }
+            
+            // Format properly with leading zeros
+            const formattedHr = hr.toString().padStart(2, '0');
+            const formattedMin = (minutes || '00').padStart(2, '0');
+            timeFormatted = `${formattedHr}:${formattedMin}`;
+          }
+          
+          // Create new reminder
+          const newReminder: Reminder = {
+            id: uuidv4(),
+            taskName,
+            date: dateFormatted,
+            time: timeFormatted,
+            type: typeStr.toLowerCase() as "daily" | "once",
+            completed: false
+          };
+          
+          console.log("Creating reminder:", newReminder);
+          
+          // Save reminder
+          saveReminder(newReminder);
+          
+          // Update UI
+          setReminders(getReminders());
+          
+          // Notify user
+          toast({
+            title: "Reminder Set",
+            description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}, ${typeStr}`,
+          });
+        } catch (error) {
+          console.error("Error parsing reminder:", error);
+          toast({
+            title: "Error Setting Reminder",
+            description: "Please try again with a valid date and time format",
+            variant: "destructive",
+          });
+        }
+      } else if (transcript.toLowerCase().includes("what are my reminders")) {
+        // Read out reminders
+        if (reminders.length === 0) {
+          toast({
+            title: "Reminders",
+            description: "You have no reminders set",
+          });
+        } else {
+          const reminderSummary = reminders
+            .slice(0, 3)
+            .map(r => `${r.taskName} on ${r.date} at ${r.time}`)
+            .join(", ");
+          
+          toast({
+            title: "Your Reminders",
+            description: reminderSummary + (reminders.length > 3 ? ` and ${reminders.length - 3} more` : ""),
+          });
+        }
       }
+    } finally {
+      // Reset processing flag with a small delay
+      setTimeout(() => {
+        setProcessingVoice(false);
+      }, 1000);
     }
   }, [transcript]);
 
@@ -118,11 +232,33 @@ const RemindersPage = () => {
     const updatedReminder = { ...reminder, completed: !reminder.completed };
     updateReminder(updatedReminder);
     setReminders(getReminders());
+    
+    if (updatedReminder.completed) {
+      // Clear from active reminders when completed
+      setActiveReminders(prev => {
+        const newState = { ...prev };
+        delete newState[reminder.id];
+        return newState;
+      });
+      
+      toast({
+        title: "Reminder Completed",
+        description: `${reminder.taskName} marked as completed`,
+      });
+    }
   };
 
   const handleDeleteReminder = (id: string) => {
     deleteReminder(id);
     setReminders(getReminders());
+    
+    // Clear from active reminders if deleted
+    setActiveReminders(prev => {
+      const newState = { ...prev };
+      delete newState[id];
+      return newState;
+    });
+    
     toast({
       title: "Reminder Deleted",
       description: "Your reminder has been removed",
@@ -156,7 +292,7 @@ const RemindersPage = () => {
             {reminders.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-muted-foreground">No reminders yet.</p>
-                <p className="mt-2">Try saying "Set reminder for laundry on April 10th at 3 PM, type once"</p>
+                <p className="mt-2">Try saying "Set reminder for coffee on April 25th at 2:15 p.m., type once"</p>
               </div>
             ) : (
               <div className="space-y-4">
