@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
 interface Profile {
   id: string;
@@ -58,17 +59,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async () => {
     if (!user) { setProfile(null); return; }
     
-    // Fix the query to match the database structure
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id as string)
-      .single();
+    try {
+      // Fix the query to match the database structure
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+        
+      if (error) {
+        console.error("Error fetching profile:", error);
+        setProfile(null);
+        return;
+      }
       
-    if (!error && data) {
-      setProfile(data as Profile);
-    } else {
-      console.error("Error fetching profile:", error);
+      if (data) {
+        setProfile({
+          id: data.id,
+          username: data.username,
+          created_at: data.created_at
+        });
+      } else {
+        setProfile(null);
+      }
+    } catch (err) {
+      console.error("Exception in refreshProfile:", err);
       setProfile(null);
     }
   };

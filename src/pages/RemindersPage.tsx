@@ -35,7 +35,7 @@ const RemindersPage = () => {
         const { data, error } = await supabase
           .from('reminders')
           .select('*')
-          .eq('user_id', user.id as string);
+          .eq('user_id', user.id);
           
         if (error) {
           console.error("Error fetching reminders from Supabase:", error);
@@ -337,10 +337,10 @@ const RemindersPage = () => {
       // Update in Supabase
       const { error } = await supabase
         .from('reminders')
-        .update({ 
-          completed: updatedReminder.completed 
+        .update({
+          completed: updatedReminder.completed
         })
-        .eq('id', reminder.id as string);
+        .eq('id', reminder.id);
         
       if (error) {
         console.error("Error updating reminder completion in Supabase:", error);
@@ -380,7 +380,7 @@ const RemindersPage = () => {
       const { error } = await supabase
         .from('reminders')
         .delete()
-        .eq('id', id as string);
+        .eq('id', id);
         
       if (error) {
         console.error("Error deleting reminder from Supabase:", error);

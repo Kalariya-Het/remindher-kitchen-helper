@@ -32,7 +32,7 @@ const PantryPage = () => {
         const { data, error } = await supabase
           .from('pantry_items')
           .select('*')
-          .eq('user_id', user.id as string);
+          .eq('user_id', user.id);
           
         if (error) {
           console.error("Error fetching pantry items from Supabase:", error);
@@ -156,7 +156,7 @@ const PantryPage = () => {
               .from('pantry_items')
               .insert({
                 name: newItem.name,
-                quantity: parseInt(quantity) || 0,
+                quantity: parseInt(newItem.quantity) || 0,
                 user_id: user.id
               });
               
@@ -217,7 +217,7 @@ const PantryPage = () => {
       const { error } = await supabase
         .from('pantry_items')
         .delete()
-        .eq('id', id as string);
+        .eq('id', id);
         
       if (error) {
         console.error("Error deleting pantry item from Supabase:", error);
