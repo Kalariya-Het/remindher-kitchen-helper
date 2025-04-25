@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { getReminders, saveReminder, updateReminder, deleteReminder } from "@/services/storage";
@@ -56,8 +57,7 @@ const RemindersPage = () => {
   const notifyReminder = (reminder: Reminder) => {
     speakText(`Reminder for ${reminder.taskName}`);
     
-    sonnerToast({
-      title: "Reminder Time",
+    sonnerToast("Reminder Time", {
       description: `It's time for: ${reminder.taskName}`,
       duration: 60000,
       action: {
