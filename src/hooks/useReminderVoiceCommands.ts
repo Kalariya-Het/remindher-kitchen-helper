@@ -1,0 +1,124 @@
+
+import { useState, useCallback } from 'react';
+import { useToast } from "@/components/ui/use-toast";
+import { v4 as uuidv4 } from "uuid";
+import { format, parse } from "date-fns";
+
+interface UseReminderVoiceCommandsProps {
+  user: { id: string } | null;
+  createReminder: (reminder: any) => Promise<void>;
+  listReminders: () => void;
+}
+
+export const useReminderVoiceCommands = ({ user, createReminder, listReminders }: UseReminderVoiceCommandsProps) => {
+  const [processingVoice, setProcessingVoice] = useState(false);
+  const [processingReminder, setProcessingReminder] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const processVoiceCommand = useCallback(async (transcript: string) => {
+    if (!transcript || processingVoice) return;
+    
+    setProcessingVoice(true);
+
+    try {
+      const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
+  
+      if (reminderMatch) {
+        const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
+        const reminderKey = `${taskName}-${dateStr}-${timeStr}-${typeStr}`;
+        
+        if (reminderKey === processingReminder) {
+          console.log("Already processing this reminder, skipping duplicate");
+          return;
+        }
+        
+        setProcessingReminder(reminderKey);
+        
+        try {
+          let dateObj;
+          try {
+            dateObj = new Date(dateStr);
+            if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
+          } catch (e) {
+            const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
+            if (monthMatch) {
+              const [, month, day] = monthMatch;
+              const year = new Date().getFullYear();
+              const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+              const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
+              
+              if (monthIndex !== -1) {
+                dateObj = new Date(year, monthIndex, parseInt(day));
+              } else {
+                throw new Error("Could not parse month name");
+              }
+            } else {
+              throw new Error("Could not parse date format");
+            }
+          }
+          
+          const dateFormatted = format(dateObj, "yyyy-MM-dd");
+          let timeFormatted = timeStr.trim();
+          
+          const timeTwelveHourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
+          if (timeTwelveHourMatch) {
+            let [, hours, minutes, period] = timeTwelveHourMatch;
+            let hr = parseInt(hours);
+            
+            if (period.toLowerCase().includes('p') && hr < 12) {
+              hr += 12;
+            } else if (period.toLowerCase().includes('a') && hr === 12) {
+              hr = 0;
+            }
+            
+            const formattedHr = hr.toString().padStart(2, '0');
+            const formattedMin = (minutes || '00').padStart(2, '0');
+            timeFormatted = `${formattedHr}:${formattedMin}`;
+          }
+          
+          if (!user) {
+            toast({
+              title: "Not Logged In",
+              description: "Please log in to create reminders",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          await createReminder({
+            task_name: taskName,
+            date: dateFormatted,
+            time: timeFormatted,
+            type: typeStr.toLowerCase(),
+            completed: false,
+            user_id: user.id
+          });
+
+          toast({
+            title: "Reminder Set",
+            description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}, ${typeStr}`,
+          });
+        } catch (error) {
+          console.error("Error parsing reminder:", error);
+          toast({
+            title: "Error Setting Reminder",
+            description: "Please try again with a valid date and time format",
+            variant: "destructive",
+          });
+        }
+      } else if (transcript.toLowerCase().includes("what are my reminders")) {
+        listReminders();
+      }
+    } finally {
+      setTimeout(() => {
+        setProcessingVoice(false);
+        setProcessingReminder(null);
+      }, 1000);
+    }
+  }, [processingVoice, processingReminder, user, createReminder, listReminders, toast]);
+
+  return {
+    processVoiceCommand,
+    processingVoice
+  };
+};
