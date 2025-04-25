@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -222,16 +223,16 @@ const AnalysisPage = () => {
                       cx="50%"
                       cy="50%"
                       outerRadius={70}
-                      label={(entry: any): string | null => {
+                      label={(entry: any): React.ReactNode => {
                         if (
                           entry &&
                           typeof entry === "object" &&
                           "name" in entry &&
                           typeof entry.name === "string"
                         ) {
-                          return String(entry.name);
+                          return entry.name;
                         }
-                        return null;
+                        return "";
                       }}
                       dataKey="value"
                     >
