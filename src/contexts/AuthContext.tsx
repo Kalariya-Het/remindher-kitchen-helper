@@ -57,12 +57,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // --- Fetch user profile from DB ---
   const refreshProfile = async () => {
     if (!user) { setProfile(null); return; }
+    
+    // Fix the query to match the database structure
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", user.id)
+      .eq("id", user.id as string)
       .single();
-    if (!error) setProfile(data ?? null);
+      
+    if (!error && data) {
+      setProfile(data as Profile);
+    } else {
+      console.error("Error fetching profile:", error);
+      setProfile(null);
+    }
   };
 
   // --- Login handler ---

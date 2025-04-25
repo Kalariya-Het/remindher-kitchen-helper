@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { getPantryItems, savePantryItem, deletePantryItem } from "@/services/storage";
@@ -33,13 +32,13 @@ const PantryPage = () => {
         const { data, error } = await supabase
           .from('pantry_items')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id as string);
           
         if (error) {
           console.error("Error fetching pantry items from Supabase:", error);
           // Fallback to local storage if Supabase fails
           setPantryItems(getPantryItems());
-        } else if (data) {
+        } else if (data && Array.isArray(data)) {
           // Map Supabase data to our PantryItem model
           const mappedItems: PantryItem[] = data.map(item => ({
             id: item.id,
@@ -156,7 +155,6 @@ const PantryPage = () => {
             const { error } = await supabase
               .from('pantry_items')
               .insert({
-                id: newItem.id,
                 name: newItem.name,
                 quantity: parseInt(quantity) || 0,
                 user_id: user.id
@@ -219,7 +217,7 @@ const PantryPage = () => {
       const { error } = await supabase
         .from('pantry_items')
         .delete()
-        .eq('id', id);
+        .eq('id', id as string);
         
       if (error) {
         console.error("Error deleting pantry item from Supabase:", error);

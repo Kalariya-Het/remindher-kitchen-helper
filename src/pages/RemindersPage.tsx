@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { getReminders, saveReminder, updateReminder, deleteReminder } from "@/services/storage";
@@ -36,13 +35,13 @@ const RemindersPage = () => {
         const { data, error } = await supabase
           .from('reminders')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id as string);
           
         if (error) {
           console.error("Error fetching reminders from Supabase:", error);
           // Fallback to local storage if Supabase fails
           setReminders(getReminders());
-        } else if (data) {
+        } else if (data && Array.isArray(data)) {
           // Map Supabase data to our Reminder model
           const mappedReminders: Reminder[] = data.map(item => ({
             id: item.id,
@@ -264,7 +263,6 @@ const RemindersPage = () => {
               const { error } = await supabase
                 .from('reminders')
                 .insert({
-                  id: newReminder.id,
                   task_name: newReminder.taskName,
                   date: newReminder.date,
                   time: newReminder.time,
@@ -339,8 +337,10 @@ const RemindersPage = () => {
       // Update in Supabase
       const { error } = await supabase
         .from('reminders')
-        .update({ completed: updatedReminder.completed })
-        .eq('id', reminder.id);
+        .update({ 
+          completed: updatedReminder.completed 
+        })
+        .eq('id', reminder.id as string);
         
       if (error) {
         console.error("Error updating reminder completion in Supabase:", error);
@@ -380,7 +380,7 @@ const RemindersPage = () => {
       const { error } = await supabase
         .from('reminders')
         .delete()
-        .eq('id', id);
+        .eq('id', id as string);
         
       if (error) {
         console.error("Error deleting reminder from Supabase:", error);
