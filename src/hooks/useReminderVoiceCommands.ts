@@ -23,17 +23,28 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
   const processVoiceCommand = useCallback(async (transcript: string) => {
     // Return early if already processing or transcript is the same as last processed
     if (!transcript || processingVoice || transcript === lastProcessedCommand.current) {
+      console.log("Skipping voice processing due to:", 
+        !transcript ? "empty transcript" : 
+        processingVoice ? "already processing" : 
+        "duplicate command");
       return;
     }
     
+    console.log("Processing voice command for reminders:", transcript);
     setProcessingVoice(true);
+    
     // Store the current transcript to prevent duplicate processing
     lastProcessedCommand.current = transcript;
 
     try {
-      const reminderMatch = transcript.match(/set reminder for (.*?) (?:on (.*?))?(?: at (.*?))?(?:,| type| type:)? (daily|once)/i);
-  
+      // Improved regex pattern to match various reminder formats
+      // Match pattern: "set reminder for [task] on [date] at [time], type [daily|once]"
+      // Also accept: "set reminder for [task] at [time] on [date], type [daily|once]"
+      // Also accept: "set reminder for [task] at [time], type [daily|once]" (uses today's date)
+      const reminderMatch = transcript.match(/set reminder for (.*?)(?:\s+on\s+(.*?))?(?:\s+at\s+(.*?))?(?:,|\s+type:?|\s+type\s+)(daily|once)/i);
+      
       if (reminderMatch) {
+        console.log("Reminder match found:", reminderMatch);
         const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
         const reminderKey = `${taskName}-${dateStr || 'today'}-${timeStr || '12:00'}-${typeStr}`;
         
@@ -112,6 +123,8 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
             user_id: user.id
           };
 
+          console.log("Creating reminder with data:", reminderData);
+
           // Call the createReminder function from parent component
           await createReminder(reminderData);
 
@@ -137,6 +150,8 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
         }
       } else if (transcript.toLowerCase().includes("what are my reminders")) {
         listReminders();
+      } else {
+        console.log("No reminder command matched in transcript:", transcript);
       }
     } finally {
       // Reset processing state after a delay
