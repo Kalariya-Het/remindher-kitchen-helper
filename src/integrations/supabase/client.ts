@@ -6,12 +6,13 @@ import type { Database } from './types';
 const SUPABASE_URL = "https://cwwfrbniblfdgwxiimtq.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN3d2ZyYm5pYmxmZGd3eGlpbXRxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MDY3MjcsImV4cCI6MjA2MDk4MjcyN30.xFemroKnTnn-6IENvSho49-6O4hAaYHn2eiXzK-2nSA";
 
-// Enable realtime subscriptions on the client
-const options = {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true
+export const supabase = createClient<Database>(
+  SUPABASE_URL, 
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true
+    }
   }
-};
-
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, options);
+);

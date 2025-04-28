@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Layout from "@/components/Layout";
 import { useToast } from "@/components/ui/use-toast";
 import { useVoice } from "@/contexts/VoiceContext";
@@ -19,9 +19,11 @@ const RemindersPage = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [lastProcessedTranscript, setLastProcessedTranscript] = useState<string>("");
-
+  const checkingRemindersRef = useRef<boolean>(false);
+  const reminderCheckerTimer = useRef<NodeJS.Timeout | null>(null);
+  
   // Fetch reminders from Supabase
-  const fetchReminders = async () => {
+  const fetchReminders = useCallback(async () => {
     setLoading(true);
     try {
       if (user) {
@@ -53,7 +55,7 @@ const RemindersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast]);
 
   // Initialize by fetching reminders
   useEffect(() => {
@@ -81,11 +83,14 @@ const RemindersPage = () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [user]);
+  }, [user, fetchReminders]);
 
   // Check for active reminders
-  useEffect(() => {
-    const checkReminders = () => {
+  const checkReminders = useCallback(() => {
+    if (checkingRemindersRef.current) return;
+    
+    checkingRemindersRef.current = true;
+    try {
       const now = new Date();
       const currentDate = now.toISOString().split('T')[0];
       const currentTime = now.toTimeString().substring(0, 5);
@@ -105,12 +110,30 @@ const RemindersPage = () => {
           }
         }
       });
-    };
-    
-    checkReminders();
-    const intervalId = setInterval(checkReminders, 60000);
-    return () => clearInterval(intervalId);
+    } finally {
+      checkingRemindersRef.current = false;
+    }
   }, [reminders, activeReminders]);
+  
+  // Set up reminder checker interval
+  useEffect(() => {
+    // Initial check
+    checkReminders();
+    
+    // Clear any existing interval
+    if (reminderCheckerTimer.current) {
+      clearInterval(reminderCheckerTimer.current);
+    }
+    
+    // Set up new interval for checking reminders every minute
+    reminderCheckerTimer.current = setInterval(checkReminders, 60000);
+    
+    return () => {
+      if (reminderCheckerTimer.current) {
+        clearInterval(reminderCheckerTimer.current);
+      }
+    };
+  }, [reminders, checkReminders]);
 
   const createReminder = useCallback(async (reminderData: Omit<Reminder, 'id'>) => {
     if (!user) return;
@@ -119,12 +142,13 @@ const RemindersPage = () => {
       console.log("Creating reminder:", reminderData);
       
       // Add the reminder to the database
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('reminders')
         .insert([{
           ...reminderData,
           user_id: user.id
-        }]);
+        }])
+        .select();
         
       if (error) {
         console.error("Error creating reminder in Supabase:", error);
@@ -134,7 +158,7 @@ const RemindersPage = () => {
           variant: "destructive",
         });
       } else {
-        console.log("Reminder created successfully");
+        console.log("Reminder created successfully:", data);
         // Fetch updated reminders after successful creation
         fetchReminders();
       }

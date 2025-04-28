@@ -14,6 +14,7 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
   const [processingVoice, setProcessingVoice] = useState(false);
   const [processingReminder, setProcessingReminder] = useState<string | null>(null);
   const lastProcessedCommand = useRef<string>('');
+  const processingTimeout = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
 
   const processVoiceCommand = useCallback(async (transcript: string) => {
@@ -119,10 +120,15 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
         listReminders();
       }
     } finally {
-      // Reset processing state after a slight delay
-      setTimeout(() => {
+      // Reset processing state after a delay
+      if (processingTimeout.current) {
+        clearTimeout(processingTimeout.current);
+      }
+      
+      processingTimeout.current = setTimeout(() => {
         setProcessingVoice(false);
-      }, 1000);
+        processingTimeout.current = null;
+      }, 2000); // Increased timeout to prevent rapid processing
     }
   }, [processingVoice, processingReminder, user, createReminder, listReminders, toast]);
 
