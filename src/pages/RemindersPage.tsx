@@ -36,19 +36,24 @@ const RemindersPage = () => {
             description: "Could not fetch reminders. Please try again.",
             variant: "destructive",
           });
+          setReminders([]);
         } else if (data) {
-          setReminders(data.map(item => ({
+          // Ensure we properly map database fields to our model
+          const mappedReminders: Reminder[] = data.map(item => ({
             id: item.id,
             task_name: item.task_name,
             date: item.date,
             time: item.time,
-            type: item.type,
-            completed: item.completed || false
-          })));
+            type: item.type as "daily" | "once",
+            completed: Boolean(item.completed),
+            user_id: item.user_id
+          }));
+          setReminders(mappedReminders);
         }
       }
     } catch (error) {
       console.error("Error in fetchReminders:", error);
+      setReminders([]);
     } finally {
       setLoading(false);
     }
@@ -108,9 +113,12 @@ const RemindersPage = () => {
     if (!user) return;
     
     try {
+      // Remove any id field if it exists (as Supabase will generate one)
+      const { id, ...reminderWithoutId } = reminderData as any;
+      
       const { error } = await supabase
         .from('reminders')
-        .insert(reminderData);
+        .insert(reminderWithoutId);
         
       if (error) {
         console.error("Error creating reminder in Supabase:", error);
@@ -147,14 +155,10 @@ const RemindersPage = () => {
   };
 
   const handleToggleComplete = async (reminder: Reminder) => {
-    const updatedReminder = { ...reminder, completed: !reminder.completed };
-    
     try {
       const { error } = await supabase
         .from('reminders')
-        .update({
-          completed: updatedReminder.completed
-        })
+        .update({ completed: !reminder.completed })
         .eq('id', reminder.id);
         
       if (error) {
@@ -165,7 +169,7 @@ const RemindersPage = () => {
           variant: "destructive",
         });
       } else {
-        if (updatedReminder.completed) {
+        if (!reminder.completed) {
           setActiveReminders(prev => {
             const newState = { ...prev };
             delete newState[reminder.id];

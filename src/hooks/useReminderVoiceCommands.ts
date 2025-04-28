@@ -1,12 +1,12 @@
 
 import { useState, useCallback } from 'react';
 import { useToast } from "@/components/ui/use-toast";
-import { v4 as uuidv4 } from "uuid";
 import { format, parse } from "date-fns";
+import { Reminder } from "@/models";
 
 interface UseReminderVoiceCommandsProps {
   user: { id: string } | null;
-  createReminder: (reminder: any) => Promise<void>;
+  createReminder: (reminder: Omit<Reminder, 'id'>) => Promise<void>;
   listReminders: () => void;
 }
 
@@ -89,7 +89,7 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
             task_name: taskName,
             date: dateFormatted,
             time: timeFormatted,
-            type: typeStr.toLowerCase(),
+            type: typeStr.toLowerCase() as "daily" | "once",
             completed: false,
             user_id: user.id
           });

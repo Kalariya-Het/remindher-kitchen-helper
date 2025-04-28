@@ -13,8 +13,7 @@ const options = {
     persistSession: true
   },
   realtime: {
-    enabled: true,
-    presence: true
+    enabled: true
   }
 };
 

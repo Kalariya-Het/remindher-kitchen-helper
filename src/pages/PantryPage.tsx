@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { getPantryItems, savePantryItem, deletePantryItem } from "@/services/storage";
@@ -43,9 +44,10 @@ const PantryPage = () => {
           const mappedItems: PantryItem[] = data.map(item => ({
             id: item.id,
             name: item.name,
-            quantity: item.quantity.toString(),
+            quantity: String(item.quantity),
             date: format(new Date(item.created_at || new Date()), "yyyy-MM-dd"),
-            time: format(new Date(item.created_at || new Date()), "HH:mm")
+            time: format(new Date(item.created_at || new Date()), "HH:mm"),
+            user_id: item.user_id
           }));
           setPantryItems(mappedItems);
         }
@@ -151,7 +153,7 @@ const PantryPage = () => {
           };
           
           if (user) {
-            // Save to Supabase
+            // Save to Supabase - don't include id as Supabase will generate one
             const { error } = await supabase
               .from('pantry_items')
               .insert({
