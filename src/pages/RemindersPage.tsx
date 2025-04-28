@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Layout from "@/components/Layout";
 import { useToast } from "@/components/ui/use-toast";
 import { useVoice } from "@/contexts/VoiceContext";
@@ -10,6 +10,7 @@ import { useReminderVoiceCommands } from "@/hooks/useReminderVoiceCommands";
 import { notifyReminder, showReminderToast } from "@/utils/reminderNotifications";
 import ReminderList from "@/components/reminders/ReminderList";
 import type { Reminder } from "@/models";
+import { v4 as uuidv4 } from "uuid";
 
 const RemindersPage = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -18,6 +19,7 @@ const RemindersPage = () => {
   const { transcript } = useVoice();
   const { toast } = useToast();
   const { user } = useAuth();
+  const [lastProcessedTranscript, setLastProcessedTranscript] = useState<string>("");
 
   // Fetch reminders from Supabase
   const fetchReminders = async () => {
@@ -38,18 +40,12 @@ const RemindersPage = () => {
           });
           setReminders([]);
         } else if (data) {
-          // Ensure we properly map database fields to our model
-          const mappedReminders: Reminder[] = data.map(item => ({
-            id: item.id,
-            task_name: item.task_name,
-            date: item.date,
-            time: item.time,
-            type: item.type as "daily" | "once",
-            completed: Boolean(item.completed),
-            user_id: item.user_id
-          }));
-          setReminders(mappedReminders);
+          // Map data directly without accessing property errors
+          setReminders(data as unknown as Reminder[]);
         }
+      } else {
+        // If not logged in, set empty reminders
+        setReminders([]);
       }
     } catch (error) {
       console.error("Error in fetchReminders:", error);
@@ -73,6 +69,7 @@ const RemindersPage = () => {
           table: 'reminders',
           filter: `user_id=eq.${user.id}`
         }, () => {
+          console.log("Reminder change detected via realtime");
           fetchReminders();
         })
         .subscribe();
@@ -109,16 +106,17 @@ const RemindersPage = () => {
     return () => clearInterval(intervalId);
   }, [reminders, activeReminders]);
 
-  const createReminder = async (reminderData: Omit<Reminder, 'id'>) => {
+  const createReminder = useCallback(async (reminderData: Omit<Reminder, 'id'>) => {
     if (!user) return;
     
     try {
-      // Remove any id field if it exists (as Supabase will generate one)
-      const { id, ...reminderWithoutId } = reminderData as any;
-      
+      console.log("Creating reminder:", reminderData);
       const { error } = await supabase
         .from('reminders')
-        .insert(reminderWithoutId);
+        .insert({
+          ...reminderData,
+          user_id: user.id
+        });
         
       if (error) {
         console.error("Error creating reminder in Supabase:", error);
@@ -127,11 +125,14 @@ const RemindersPage = () => {
           description: "Could not create reminder. Please try again.",
           variant: "destructive",
         });
+      } else {
+        // Fetch updated reminders after successful creation
+        fetchReminders();
       }
     } catch (error) {
       console.error("Error in createReminder:", error);
     }
-  };
+  }, [user, toast]);
 
   const snoozeReminder = (reminder: Reminder) => {
     setActiveReminders(prev => {
@@ -156,9 +157,10 @@ const RemindersPage = () => {
 
   const handleToggleComplete = async (reminder: Reminder) => {
     try {
+      const newCompletedState = !reminder.completed;
       const { error } = await supabase
         .from('reminders')
-        .update({ completed: !reminder.completed })
+        .update({ completed: newCompletedState })
         .eq('id', reminder.id);
         
       if (error) {
@@ -176,6 +178,8 @@ const RemindersPage = () => {
             return newState;
           });
         }
+        // Fetch updated reminders
+        fetchReminders();
       }
     } catch (error) {
       console.error("Error in handleToggleComplete:", error);
@@ -202,13 +206,15 @@ const RemindersPage = () => {
           delete newState[id];
           return newState;
         });
+        // Fetch updated reminders
+        fetchReminders();
       }
     } catch (error) {
       console.error("Error in handleDeleteReminder:", error);
     }
   };
 
-  // Process voice commands
+  // Process voice commands with duplicate prevention
   const { processVoiceCommand } = useReminderVoiceCommands({
     user,
     createReminder,
@@ -216,10 +222,11 @@ const RemindersPage = () => {
   });
 
   useEffect(() => {
-    if (transcript) {
+    if (transcript && transcript !== lastProcessedTranscript) {
+      setLastProcessedTranscript(transcript);
       processVoiceCommand(transcript);
     }
-  }, [transcript, processVoiceCommand]);
+  }, [transcript, processVoiceCommand, lastProcessedTranscript]);
 
   return (
     <Layout>

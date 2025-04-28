@@ -1,7 +1,7 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
-import { format, parse } from "date-fns";
+import { format } from "date-fns";
 import { Reminder } from "@/models";
 
 interface UseReminderVoiceCommandsProps {
@@ -13,12 +13,18 @@ interface UseReminderVoiceCommandsProps {
 export const useReminderVoiceCommands = ({ user, createReminder, listReminders }: UseReminderVoiceCommandsProps) => {
   const [processingVoice, setProcessingVoice] = useState(false);
   const [processingReminder, setProcessingReminder] = useState<string | null>(null);
+  const lastProcessedCommand = useRef<string>('');
   const { toast } = useToast();
 
   const processVoiceCommand = useCallback(async (transcript: string) => {
-    if (!transcript || processingVoice) return;
+    // Return early if already processing or transcript is the same as last processed
+    if (!transcript || processingVoice || transcript === lastProcessedCommand.current) {
+      return;
+    }
     
     setProcessingVoice(true);
+    // Store the current transcript to prevent duplicate processing
+    lastProcessedCommand.current = transcript;
 
     try {
       const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
@@ -110,6 +116,7 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
         listReminders();
       }
     } finally {
+      // Reset processing state after a slight delay
       setTimeout(() => {
         setProcessingVoice(false);
         setProcessingReminder(null);

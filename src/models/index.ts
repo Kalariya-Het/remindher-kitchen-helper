@@ -2,7 +2,7 @@
 // Reminder model
 export interface Reminder {
   id: string;
-  task_name: string; // Changed from taskName to match database schema
+  task_name: string; // Matches database schema
   date: string; // ISO string
   time: string; // 24 hour format, HH:MM
   type: "daily" | "once";

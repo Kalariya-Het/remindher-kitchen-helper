@@ -11,9 +11,6 @@ const options = {
   auth: {
     autoRefreshToken: true,
     persistSession: true
-  },
-  realtime: {
-    enabled: true
   }
 };
 

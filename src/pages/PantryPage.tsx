@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Layout from "@/components/Layout";
-import { getPantryItems, savePantryItem, deletePantryItem } from "@/services/storage";
 import { PantryItem } from "@/models";
 import { useToast } from "@/components/ui/use-toast";
 import { useVoice } from "@/contexts/VoiceContext";
@@ -23,6 +22,7 @@ const PantryPage = () => {
   const [processingVoice, setProcessingVoice] = useState(false);
   const [processingItem, setProcessingItem] = useState<string | null>(null);
   const { user } = useAuth();
+  const lastProcessedTranscript = useRef<string>("");
 
   // Fetch pantry items from Supabase
   const fetchPantryItems = async () => {
@@ -37,28 +37,26 @@ const PantryPage = () => {
           
         if (error) {
           console.error("Error fetching pantry items from Supabase:", error);
-          // Fallback to local storage if Supabase fails
-          setPantryItems(getPantryItems());
+          setPantryItems([]);
         } else if (data && Array.isArray(data)) {
           // Map Supabase data to our PantryItem model
           const mappedItems: PantryItem[] = data.map(item => ({
-            id: item.id,
-            name: item.name,
+            id: item.id as string,
+            name: item.name as string,
             quantity: String(item.quantity),
             date: format(new Date(item.created_at || new Date()), "yyyy-MM-dd"),
             time: format(new Date(item.created_at || new Date()), "HH:mm"),
-            user_id: item.user_id
+            user_id: item.user_id as string
           }));
           setPantryItems(mappedItems);
         }
       } else {
-        // Not logged in, use local storage
-        setPantryItems(getPantryItems());
+        // Not logged in, set empty pantry
+        setPantryItems([]);
       }
     } catch (error) {
       console.error("Error in fetchPantryItems:", error);
-      // Fallback to local storage
-      setPantryItems(getPantryItems());
+      setPantryItems([]);
     } finally {
       setLoading(false);
     }
@@ -78,6 +76,7 @@ const PantryPage = () => {
           table: 'pantry_items',
           filter: `user_id=eq.${user.id}`
         }, () => {
+          console.log("Pantry change detected via realtime");
           fetchPantryItems();
         })
         .subscribe();
@@ -89,9 +88,12 @@ const PantryPage = () => {
   }, [user]);
 
   useEffect(() => {
-    // Process voice commands for pantry management
-    if (!transcript || processingVoice) return;
+    // Process voice commands for pantry management with duplicate check
+    if (!transcript || processingVoice || transcript === lastProcessedTranscript.current) return;
 
+    // Update last processed transcript to prevent duplicates
+    lastProcessedTranscript.current = transcript;
+    
     // Prevent duplicate processing
     setProcessingVoice(true);
 
@@ -111,7 +113,7 @@ const PantryPage = () => {
         if (commaMatch) {
           // If it matches comma pattern
           [, name, quantity] = commaMatch;
-        } else if (simpleMatch) {
+        } else if (simplePattern) {
           // If it matches simple pattern
           [, name, quantity] = simpleMatch;
         }
@@ -143,37 +145,38 @@ const PantryPage = () => {
             });
           }
           
-          // Create new pantry item
-          const newItem: PantryItem = {
-            id: uuidv4(),
-            name: name.trim(),
-            quantity: quantity.trim(),
-            date: format(now, "yyyy-MM-dd"),
-            time: format(now, "HH:mm")
-          };
-          
           if (user) {
-            // Save to Supabase - don't include id as Supabase will generate one
-            const { error } = await supabase
-              .from('pantry_items')
-              .insert({
-                name: newItem.name,
-                quantity: parseInt(newItem.quantity) || 0,
-                user_id: user.id
-              });
-              
-            if (error) {
-              console.error("Error saving pantry item to Supabase:", error);
-              // Fallback to local storage
-              savePantryItem(newItem);
-              setPantryItems(getPantryItems());
-            } else {
-              fetchPantryItems();
+            try {
+              console.log("Saving pantry item:", name, quantity);
+              // Save to Supabase
+              const { error } = await supabase
+                .from('pantry_items')
+                .insert({
+                  name: name.trim(),
+                  quantity: parseInt(quantity) || 1,
+                  user_id: user.id
+                });
+                
+              if (error) {
+                console.error("Error saving pantry item to Supabase:", error);
+                toast({
+                  title: "Error",
+                  description: "Could not save pantry item. Please try again.",
+                  variant: "destructive",
+                });
+              } else {
+                // Refetch pantry items after successful save
+                fetchPantryItems();
+              }
+            } catch (err) {
+              console.error("Error saving pantry item:", err);
             }
           } else {
-            // Not logged in, use local storage only
-            savePantryItem(newItem);
-            setPantryItems(getPantryItems());
+            toast({
+              title: "Not Logged In",
+              description: "Please log in to save pantry items",
+              variant: "destructive",
+            });
           }
           
           // Notify user with enhanced toast
@@ -211,7 +214,7 @@ const PantryPage = () => {
     };
     
     processVoiceCommand();
-  }, [transcript, pantryItems, processingVoice, processingItem, user]);
+  }, [transcript, pantryItems, processingVoice, processingItem, user, toast]);
 
   const handleDeleteItem = async (id: string) => {
     if (user) {
@@ -223,16 +226,15 @@ const PantryPage = () => {
         
       if (error) {
         console.error("Error deleting pantry item from Supabase:", error);
-        // Fallback to local storage
-        deletePantryItem(id);
-        setPantryItems(getPantryItems());
+        toast({
+          title: "Error",
+          description: "Could not delete item. Please try again.",
+          variant: "destructive",
+        });
       } else {
+        // Refresh pantry items after deletion
         fetchPantryItems();
       }
-    } else {
-      // Not logged in, use local storage only
-      deletePantryItem(id);
-      setPantryItems(getPantryItems());
     }
     
     toast({
@@ -260,7 +262,7 @@ const PantryPage = () => {
         {!user && (
           <div className="my-4 p-4 bg-yellow-100 dark:bg-yellow-900 rounded-md">
             <p className="text-yellow-800 dark:text-yellow-200">
-              You're not logged in. Pantry items will be stored locally but won't sync across devices.
+              You're not logged in. Please log in to save pantry items across devices.
               <Button variant="link" className="p-0 h-auto ml-2">
                 Login to sync
               </Button>
