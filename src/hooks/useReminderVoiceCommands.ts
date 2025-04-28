@@ -111,6 +111,9 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
             description: "Please try again with a valid date and time format",
             variant: "destructive",
           });
+        } finally {
+          // Reset processing state for this specific reminder
+          setProcessingReminder(null);
         }
       } else if (transcript.toLowerCase().includes("what are my reminders")) {
         listReminders();
@@ -119,7 +122,6 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
       // Reset processing state after a slight delay
       setTimeout(() => {
         setProcessingVoice(false);
-        setProcessingReminder(null);
       }, 1000);
     }
   }, [processingVoice, processingReminder, user, createReminder, listReminders, toast]);

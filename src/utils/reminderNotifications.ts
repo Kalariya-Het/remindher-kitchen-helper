@@ -3,7 +3,18 @@ import { Reminder } from "@/models";
 import { speakText } from "./speechSynthesis";
 import { toast as sonnerToast } from "sonner";
 
+// Create audio element for notification sound
+const notificationSound = new Audio('/notification-sound.mp3');
+
 export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSnooze: () => void) => {
+  // Play notification sound
+  try {
+    notificationSound.play().catch(err => console.error("Error playing notification sound:", err));
+  } catch (error) {
+    console.error("Error with notification sound:", error);
+  }
+  
+  // Speak the reminder
   speakText(`Reminder for ${reminder.task_name}`);
   
   sonnerToast("Reminder Time", {

@@ -30,12 +30,16 @@ const AnalysisPage = () => {
   const [timeRange, setTimeRange] = useState("all");
   const { user } = useAuth();
 
+  console.log("AnalysisPage: Current time range selected:", timeRange);
+  console.log("AnalysisPage: Current user:", user);
+  
   // Fetch reminders from Supabase
   const remindersQuery = useQuery({
-    queryKey: ["reminders", user?.id],
+    queryKey: ["reminders", user?.id, timeRange],
     queryFn: async () => {
       if (!user) return [];
       
+      console.log("Fetching reminders for analysis");
       const { data, error } = await supabase
         .from('reminders')
         .select('*')
@@ -46,6 +50,7 @@ const AnalysisPage = () => {
         return [];
       }
       
+      console.log("Fetched reminders for analysis:", data);
       return data as Reminder[];
     },
     enabled: !!user,
@@ -53,10 +58,11 @@ const AnalysisPage = () => {
 
   // Fetch tasks from Supabase
   const tasksQuery = useQuery({
-    queryKey: ["tasks", user?.id],
+    queryKey: ["tasks", user?.id, timeRange],
     queryFn: async () => {
       if (!user) return [];
       
+      console.log("Fetching tasks for analysis");
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -67,6 +73,7 @@ const AnalysisPage = () => {
         return [];
       }
       
+      console.log("Fetched tasks for analysis:", data);
       return data as Task[];
     },
     enabled: !!user,
@@ -74,10 +81,11 @@ const AnalysisPage = () => {
 
   // Fetch pantry items from Supabase
   const pantryItemsQuery = useQuery({
-    queryKey: ["pantryItems", user?.id],
+    queryKey: ["pantryItems", user?.id, timeRange],
     queryFn: async () => {
       if (!user) return [];
       
+      console.log("Fetching pantry items for analysis");
       const { data, error } = await supabase
         .from('pantry_items')
         .select('*')
@@ -88,6 +96,7 @@ const AnalysisPage = () => {
         return [];
       }
       
+      console.log("Fetched pantry items for analysis:", data);
       return data.map(item => ({
         id: item.id as string,
         name: item.name as string,
@@ -126,6 +135,7 @@ const AnalysisPage = () => {
     const completed = filtered.filter((task) => task.completed).length;
     const pending = filtered.length - completed;
 
+    console.log("Task stats calculated:", { completed, pending });
     return { completed, pending };
   }, [tasksQuery.data, timeRange]);
 
@@ -141,6 +151,7 @@ const AnalysisPage = () => {
     const daily = filtered.filter((reminder) => reminder.type === "daily").length;
     const once = filtered.filter((reminder) => reminder.type === "once").length;
 
+    console.log("Reminder stats calculated:", { completed, pending, daily, once });
     return { completed, pending, daily, once };
   }, [remindersQuery.data, timeRange]);
 
@@ -174,7 +185,10 @@ const AnalysisPage = () => {
           <div className="mt-4 md:mt-0">
             <Select
               value={timeRange}
-              onValueChange={(value) => setTimeRange(value)}
+              onValueChange={(value) => {
+                console.log("Time range changed to:", value);
+                setTimeRange(value);
+              }}
             >
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Time Range" />

@@ -10,7 +10,6 @@ import { useReminderVoiceCommands } from "@/hooks/useReminderVoiceCommands";
 import { notifyReminder, showReminderToast } from "@/utils/reminderNotifications";
 import ReminderList from "@/components/reminders/ReminderList";
 import type { Reminder } from "@/models";
-import { v4 as uuidv4 } from "uuid";
 
 const RemindersPage = () => {
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -26,6 +25,7 @@ const RemindersPage = () => {
     setLoading(true);
     try {
       if (user) {
+        console.log("Fetching reminders for user:", user.id);
         const { data, error } = await supabase
           .from('reminders')
           .select('*')
@@ -40,8 +40,8 @@ const RemindersPage = () => {
           });
           setReminders([]);
         } else if (data) {
-          // Map data directly without accessing property errors
-          setReminders(data as unknown as Reminder[]);
+          console.log("Fetched reminders:", data);
+          setReminders(data as Reminder[]);
         }
       } else {
         // If not logged in, set empty reminders
@@ -57,24 +57,27 @@ const RemindersPage = () => {
 
   // Initialize by fetching reminders
   useEffect(() => {
+    console.log("RemindersPage initialized, fetching reminders");
     fetchReminders();
     
     // Set up real-time subscription
     if (user) {
+      console.log("Setting up realtime subscription for user:", user.id);
       const channel = supabase
-        .channel('public:reminders')
+        .channel('reminders_channel')
         .on('postgres_changes', { 
           event: '*', 
           schema: 'public', 
           table: 'reminders',
           filter: `user_id=eq.${user.id}`
-        }, () => {
-          console.log("Reminder change detected via realtime");
+        }, (payload) => {
+          console.log("Reminder change detected via realtime:", payload);
           fetchReminders();
         })
         .subscribe();
         
       return () => {
+        console.log("Cleaning up realtime subscription");
         supabase.removeChannel(channel);
       };
     }
@@ -87,9 +90,12 @@ const RemindersPage = () => {
       const currentDate = now.toISOString().split('T')[0];
       const currentTime = now.toTimeString().substring(0, 5);
       
+      console.log("Checking for active reminders at:", currentDate, currentTime);
+      
       reminders.forEach(reminder => {
         if (!reminder.completed && !activeReminders[reminder.id]) {
           if (reminder.date === currentDate && reminder.time === currentTime) {
+            console.log("Active reminder found:", reminder);
             setActiveReminders(prev => ({ ...prev, [reminder.id]: true }));
             notifyReminder(
               reminder,
@@ -111,12 +117,14 @@ const RemindersPage = () => {
     
     try {
       console.log("Creating reminder:", reminderData);
+      
+      // Add the reminder to the database
       const { error } = await supabase
         .from('reminders')
-        .insert({
+        .insert([{
           ...reminderData,
           user_id: user.id
-        });
+        }]);
         
       if (error) {
         console.error("Error creating reminder in Supabase:", error);
@@ -126,13 +134,14 @@ const RemindersPage = () => {
           variant: "destructive",
         });
       } else {
+        console.log("Reminder created successfully");
         // Fetch updated reminders after successful creation
         fetchReminders();
       }
     } catch (error) {
       console.error("Error in createReminder:", error);
     }
-  }, [user, toast]);
+  }, [user, toast, fetchReminders]);
 
   const snoozeReminder = (reminder: Reminder) => {
     setActiveReminders(prev => {
@@ -147,6 +156,7 @@ const RemindersPage = () => {
     });
     
     setTimeout(() => {
+      console.log("Snoozed reminder triggered again:", reminder);
       notifyReminder(
         reminder,
         () => handleToggleComplete(reminder),
@@ -158,6 +168,8 @@ const RemindersPage = () => {
   const handleToggleComplete = async (reminder: Reminder) => {
     try {
       const newCompletedState = !reminder.completed;
+      console.log("Toggling reminder completion:", reminder.id, "to", newCompletedState);
+      
       const { error } = await supabase
         .from('reminders')
         .update({ completed: newCompletedState })
@@ -171,6 +183,7 @@ const RemindersPage = () => {
           variant: "destructive",
         });
       } else {
+        console.log("Reminder updated successfully");
         if (!reminder.completed) {
           setActiveReminders(prev => {
             const newState = { ...prev };
@@ -188,6 +201,8 @@ const RemindersPage = () => {
 
   const handleDeleteReminder = async (id: string) => {
     try {
+      console.log("Deleting reminder:", id);
+      
       const { error } = await supabase
         .from('reminders')
         .delete()
@@ -201,6 +216,7 @@ const RemindersPage = () => {
           variant: "destructive",
         });
       } else {
+        console.log("Reminder deleted successfully");
         setActiveReminders(prev => {
           const newState = { ...prev };
           delete newState[id];
@@ -223,6 +239,7 @@ const RemindersPage = () => {
 
   useEffect(() => {
     if (transcript && transcript !== lastProcessedTranscript) {
+      console.log("Processing new voice command:", transcript);
       setLastProcessedTranscript(transcript);
       processVoiceCommand(transcript);
     }
