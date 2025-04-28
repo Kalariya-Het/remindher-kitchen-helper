@@ -163,41 +163,47 @@ export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSno
   dialogContainer.appendChild(dialogRoot);
   
   ReactDOM.render(
-    <ReminderDialog 
-      reminder={reminder} 
-      onComplete={() => {
+    React.createElement(ReminderDialog, { 
+      reminder, 
+      onComplete: () => {
         onComplete();
         // Remove dialog after action
-        dialogContainer?.removeChild(dialogRoot);
+        if (dialogContainer && dialogRoot) {
+          dialogContainer.removeChild(dialogRoot);
+        }
         activeDialogs.delete(reminder.id);
         // Stop sound
         if (notificationSound) {
           notificationSound.pause();
           notificationSound.currentTime = 0;
         }
-      }}
-      onSnooze={() => {
+      },
+      onSnooze: () => {
         onSnooze();
         // Remove dialog after action
-        dialogContainer?.removeChild(dialogRoot);
+        if (dialogContainer && dialogRoot) {
+          dialogContainer.removeChild(dialogRoot);
+        }
         activeDialogs.delete(reminder.id);
         // Stop sound
         if (notificationSound) {
           notificationSound.pause();
           notificationSound.currentTime = 0;
         }
-      }}
-      onClose={() => {
+      },
+      onClose: () => {
         // Remove dialog when closed
-        dialogContainer?.removeChild(dialogRoot);
+        if (dialogContainer && dialogRoot) {
+          dialogContainer.removeChild(dialogRoot);
+        }
         activeDialogs.delete(reminder.id);
         // Stop sound
         if (notificationSound) {
           notificationSound.pause();
           notificationSound.currentTime = 0;
         }
-      }}
-    />,
+      }
+    }),
     dialogRoot
   );
 };
