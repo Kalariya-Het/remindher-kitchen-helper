@@ -3,6 +3,12 @@
  * Utility for handling speech synthesis
  */
 export const speakText = (message: string) => {
+  // Check if we're in a browser environment
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    console.error("Speech synthesis not available");
+    return;
+  }
+  
   // Cancel any existing speech
   window.speechSynthesis.cancel();
   

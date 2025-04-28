@@ -3,6 +3,9 @@ import { useState, useCallback, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { format } from "date-fns";
 import { Reminder } from "@/models";
+import { supabase } from "@/integrations/supabase/client";
+import { speakText } from "@/utils/speechSynthesis";
+import { toast as sonnerToast } from "sonner";
 
 interface UseReminderVoiceCommandsProps {
   user: { id: string } | null;
@@ -28,11 +31,11 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
     lastProcessedCommand.current = transcript;
 
     try {
-      const reminderMatch = transcript.match(/set reminder for (.*?) on (.*?) at (.*?)(?:,| type| type:) (daily|once)/i);
+      const reminderMatch = transcript.match(/set reminder for (.*?) (?:on (.*?))?(?: at (.*?))?(?:,| type| type:)? (daily|once)/i);
   
       if (reminderMatch) {
         const [, taskName, dateStr, timeStr, typeStr] = reminderMatch;
-        const reminderKey = `${taskName}-${dateStr}-${timeStr}-${typeStr}`;
+        const reminderKey = `${taskName}-${dateStr || 'today'}-${timeStr || '12:00'}-${typeStr}`;
         
         if (reminderKey === processingReminder) {
           console.log("Already processing this reminder, skipping duplicate");
@@ -42,32 +45,39 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
         setProcessingReminder(reminderKey);
         
         try {
+          // Parse date - use today's date if not specified
           let dateObj;
-          try {
-            dateObj = new Date(dateStr);
-            if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
-          } catch (e) {
-            const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
-            if (monthMatch) {
-              const [, month, day] = monthMatch;
-              const year = new Date().getFullYear();
-              const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
-              const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
-              
-              if (monthIndex !== -1) {
-                dateObj = new Date(year, monthIndex, parseInt(day));
+          if (!dateStr || dateStr.trim() === '') {
+            dateObj = new Date();
+          } else {
+            try {
+              dateObj = new Date(dateStr);
+              if (isNaN(dateObj.getTime())) throw new Error("Invalid date format");
+            } catch (e) {
+              const monthMatch = dateStr.match(/(\w+)\s+(\d+)(?:st|nd|rd|th)?/i);
+              if (monthMatch) {
+                const [, month, day] = monthMatch;
+                const year = new Date().getFullYear();
+                const monthNames = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+                const monthIndex = monthNames.findIndex(m => m.toLowerCase().startsWith(month.toLowerCase()));
+                
+                if (monthIndex !== -1) {
+                  dateObj = new Date(year, monthIndex, parseInt(day));
+                } else {
+                  throw new Error("Could not parse month name");
+                }
               } else {
-                throw new Error("Could not parse month name");
+                throw new Error("Could not parse date format");
               }
-            } else {
-              throw new Error("Could not parse date format");
             }
           }
           
           const dateFormatted = format(dateObj, "yyyy-MM-dd");
-          let timeFormatted = timeStr.trim();
           
-          const timeTwelveHourMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
+          // Parse time - use current time if not specified
+          let timeFormatted = timeStr ? timeStr.trim() : format(new Date(), "HH:mm");
+          
+          const timeTwelveHourMatch = timeFormatted.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)/i);
           if (timeTwelveHourMatch) {
             let [, hours, minutes, period] = timeTwelveHourMatch;
             let hr = parseInt(hours);
@@ -92,19 +102,28 @@ export const useReminderVoiceCommands = ({ user, createReminder, listReminders }
             return;
           }
 
-          await createReminder({
+          // Create the reminder object
+          const reminderData = {
             task_name: taskName,
             date: dateFormatted,
             time: timeFormatted,
             type: typeStr.toLowerCase() as "daily" | "once",
             completed: false,
             user_id: user.id
-          });
+          };
 
-          toast({
-            title: "Reminder Set",
-            description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}, ${typeStr}`,
+          // Call the createReminder function from parent component
+          await createReminder(reminderData);
+
+          // Provide immediate feedback to the user
+          sonnerToast("Reminder Set", {
+            description: `Reminder for ${taskName} set for ${format(dateObj, "MMM d")} at ${timeFormatted}`,
+            className: "p-4 rounded-lg bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800"
           });
+          
+          // Provide voice feedback
+          speakText(`Reminder set for ${taskName}`);
+
         } catch (error) {
           console.error("Error parsing reminder:", error);
           toast({

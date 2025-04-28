@@ -9,6 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useReminderVoiceCommands } from "@/hooks/useReminderVoiceCommands";
 import { notifyReminder, showReminderToast } from "@/utils/reminderNotifications";
 import ReminderList from "@/components/reminders/ReminderList";
+import { toast as sonnerToast } from "sonner";
 import type { Reminder } from "@/models";
 
 const RemindersPage = () => {
@@ -136,7 +137,14 @@ const RemindersPage = () => {
   }, [reminders, checkReminders]);
 
   const createReminder = useCallback(async (reminderData: Omit<Reminder, 'id'>) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Not Logged In",
+        description: "Please log in to create reminders.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       console.log("Creating reminder:", reminderData);
@@ -159,6 +167,17 @@ const RemindersPage = () => {
         });
       } else {
         console.log("Reminder created successfully:", data);
+        // Show success toast
+        sonnerToast("Reminder Created", {
+          description: `${reminderData.task_name} set for ${reminderData.date} at ${reminderData.time}`,
+          className: "p-4 rounded-lg bg-green-50 dark:bg-green-900 border border-green-200 dark:border-green-800",
+        });
+        
+        // Update local state for immediate UI feedback
+        if (data && data.length > 0) {
+          setReminders(prev => [...prev, data[0] as Reminder]);
+        }
+        
         // Fetch updated reminders after successful creation
         fetchReminders();
       }
@@ -215,6 +234,11 @@ const RemindersPage = () => {
             return newState;
           });
         }
+        // Update local state for immediate UI feedback
+        setReminders(prev => prev.map(r => 
+          r.id === reminder.id ? { ...r, completed: newCompletedState } : r
+        ));
+        
         // Fetch updated reminders
         fetchReminders();
       }
@@ -246,6 +270,10 @@ const RemindersPage = () => {
           delete newState[id];
           return newState;
         });
+        
+        // Update local state for immediate UI feedback
+        setReminders(prev => prev.filter(r => r.id !== id));
+        
         // Fetch updated reminders
         fetchReminders();
       }
