@@ -2,18 +2,9 @@
 import { Reminder } from "@/models";
 import { speakText } from "./speechSynthesis";
 import { toast as sonnerToast } from "sonner";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import * as React from "react";
 import * as ReactDOM from "react-dom/client";
+import ReminderDialog from "@/components/reminders/ReminderDialog";
+import * as React from "react";
 
 // Create audio element for notification sound
 let notificationSound: HTMLAudioElement | undefined;
@@ -73,55 +64,6 @@ const playSound = async () => {
   }
 };
 
-// The ReminderDialogContent component
-interface ReminderDialogProps {
-  reminder: Reminder; 
-  onComplete: () => void; 
-  onSnooze: () => void;
-  onClose: () => void;
-}
-
-const ReminderDialogContent = ({ reminder, onComplete, onSnooze, onClose }: ReminderDialogProps) => {
-  React.useEffect(() => {
-    // Auto-close after 5 minutes if no action is taken (but still snooze)
-    const timeout = setTimeout(() => {
-      onSnooze();
-      onClose();
-    }, 5 * 60 * 1000);
-    
-    return () => clearTimeout(timeout);
-  }, [onSnooze, onClose]);
-  
-  return (
-    <AlertDialog defaultOpen={true} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <AlertDialogContent className="max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-xl text-center">
-            Reminder: {reminder.task_name}
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-center text-lg">
-            It's time for your scheduled reminder!
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="flex justify-center gap-4">
-          <AlertDialogCancel
-            onClick={onSnooze}
-            className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
-          >
-            Snooze 5 minutes
-          </AlertDialogCancel>
-          <AlertDialogAction
-            onClick={onComplete}
-            className="bg-green-500 hover:bg-green-600 text-white"
-          >
-            Mark as Complete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-};
-
 export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSnooze: () => void) => {
   // Ensure we're in a browser environment
   if (typeof window === 'undefined') return;
@@ -168,11 +110,12 @@ export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSno
   // Create root for React dialog
   const dialogRoot = ReactDOM.createRoot(dialogContainer);
   
-  // Render the dialog component
+  // Render the dialog component using React.createElement to avoid JSX in .ts file
   dialogRoot.render(
-    <ReminderDialogContent
-      reminder={reminder} 
-      onComplete={() => {
+    React.createElement(ReminderDialog, {
+      reminder,
+      isOpen: true,
+      onComplete: () => {
         onComplete();
         dialogRoot.unmount();
         activeDialogs.delete(reminder.id);
@@ -181,8 +124,8 @@ export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSno
           notificationSound.pause();
           notificationSound.currentTime = 0;
         }
-      }}
-      onSnooze={() => {
+      },
+      onSnooze: () => {
         onSnooze();
         dialogRoot.unmount();
         activeDialogs.delete(reminder.id);
@@ -191,8 +134,8 @@ export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSno
           notificationSound.pause();
           notificationSound.currentTime = 0;
         }
-      }}
-      onClose={() => {
+      },
+      onClose: () => {
         dialogRoot.unmount();
         activeDialogs.delete(reminder.id);
         // Stop sound
@@ -200,8 +143,8 @@ export const notifyReminder = (reminder: Reminder, onComplete: () => void, onSno
           notificationSound.pause();
           notificationSound.currentTime = 0;
         }
-      }}
-    />
+      }
+    })
   );
 };
 
