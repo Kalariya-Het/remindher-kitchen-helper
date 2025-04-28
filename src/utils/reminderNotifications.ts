@@ -48,36 +48,40 @@ const ReminderDialog = ({
     return () => clearTimeout(timeout);
   }, [onSnooze, onClose]);
   
-  return (
-    <AlertDialog defaultOpen={true} onOpenChange={(open) => {
+  return React.createElement(AlertDialog, { 
+    defaultOpen: true, 
+    onOpenChange: (open: boolean) => {
       if (!open) onClose();
-    }}>
-      <AlertDialogContent className="max-w-md">
-        <AlertDialogHeader>
-          <AlertDialogTitle className="text-xl text-center">
-            Reminder: {reminder.task_name}
-          </AlertDialogTitle>
-          <AlertDialogDescription className="text-center text-lg">
-            It's time for your scheduled reminder!
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="flex justify-center gap-4">
-          <AlertDialogCancel 
-            onClick={onSnooze}
-            className="bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
-          >
-            Snooze 5 minutes
-          </AlertDialogCancel>
-          <AlertDialogAction 
-            onClick={onComplete}
-            className="bg-green-500 hover:bg-green-600 text-white"
-          >
-            Mark as Complete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
+    }
+  }, React.createElement(AlertDialogContent, { 
+    className: "max-w-md" 
+  }, [
+    React.createElement(AlertDialogHeader, { key: "header" }, [
+      React.createElement(AlertDialogTitle, { 
+        key: "title",
+        className: "text-xl text-center"
+      }, `Reminder: ${reminder.task_name}`),
+      React.createElement(AlertDialogDescription, { 
+        key: "description",
+        className: "text-center text-lg"
+      }, "It's time for your scheduled reminder!")
+    ]),
+    React.createElement(AlertDialogFooter, { 
+      key: "footer",
+      className: "flex justify-center gap-4"
+    }, [
+      React.createElement(AlertDialogCancel, {
+        key: "cancel",
+        onClick: onSnooze,
+        className: "bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700"
+      }, "Snooze 5 minutes"),
+      React.createElement(AlertDialogAction, {
+        key: "action",
+        onClick: onComplete,
+        className: "bg-green-500 hover:bg-green-600 text-white"
+      }, "Mark as Complete")
+    ])
+  ]));
 };
 
 // Function to play notification sound with retry logic
